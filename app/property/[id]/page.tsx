@@ -5,6 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import ScoreRing from "@/components/ScoreRing";
 import SubscoreCard from "@/components/SubscoreCard";
+import Sidebar from "@/components/Sidebar";
 import { Property } from "@/lib/types";
 
 export default async function PropertyPage({ params }: { params: Promise<{ id: string }> }) {
@@ -25,77 +26,92 @@ export default async function PropertyPage({ params }: { params: Promise<{ id: s
 
   const property = data as Property;
   const date = new Date(property.created_at).toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
+    month: "long", day: "numeric", year: "numeric",
   });
 
   return (
-    <div className="min-h-screen">
-      <header className="border-b border-gray-800 bg-gray-950/80 backdrop-blur sticky top-0 z-10">
-        <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-3">
-          <Link href="/dashboard" className="text-gray-400 hover:text-white transition-colors">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div className="flex min-h-screen" style={{ background: "var(--bg-base)" }}>
+      <Sidebar />
+
+      <main className="flex-1 min-w-0 pb-12">
+        {/* Header */}
+        <div className="px-8 pt-8 pb-6 border-b flex items-center gap-4" style={{ borderColor: "var(--border-subtle)" }}>
+          <Link href="/dashboard" className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-white/5 transition-colors">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </Link>
-          <h1 className="font-semibold text-white truncate">{property.address}</h1>
-        </div>
-      </header>
-
-      <main className="max-w-3xl mx-auto px-4 py-8 space-y-8">
-        {/* Hero score */}
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 flex flex-col sm:flex-row items-center gap-6">
-          <ScoreRing score={property.overall_score} size={130} strokeWidth={12} />
-          <div className="text-center sm:text-left">
-            <p className="text-xs uppercase tracking-widest text-gray-500 mb-1">Overall score</p>
-            <h2 className="text-xl font-bold text-white">{property.address}</h2>
-            <p className="text-gray-400 text-sm mt-1">Analyzed {date}</p>
+          <div className="min-w-0">
+            <h1 className="text-lg font-semibold text-white truncate">{property.address}</h1>
+            <p className="text-slate-500 text-xs mt-0.5">Analyzed {date}</p>
           </div>
         </div>
 
-        {/* Verdict */}
-        <section>
-          <h3 className="text-xs uppercase tracking-widest text-gray-500 mb-3">Verdict</h3>
-          <p className="text-gray-200 leading-relaxed">{property.verdict}</p>
-        </section>
+        <div className="px-8 py-8 space-y-8">
+          {/* Hero row: score + verdict */}
+          <div className="grid lg:grid-cols-[auto,1fr] gap-6">
+            {/* Score card */}
+            <div className="rounded-2xl p-8 flex flex-col items-center justify-center border min-w-[200px]"
+              style={{ background: "var(--bg-surface)", borderColor: "var(--border-subtle)" }}>
+              <ScoreRing score={property.overall_score} size={150} strokeWidth={10} />
+              <p className="text-xs text-slate-500 mt-5 text-center uppercase tracking-widest">Overall score</p>
+            </div>
 
-        {/* Bull / Bear */}
-        <div className="grid sm:grid-cols-2 gap-4">
-          <div className="bg-green-900/20 border border-green-800/40 rounded-xl p-4">
-            <p className="text-xs uppercase tracking-widest text-green-500 mb-2">Bull case</p>
-            <p className="text-gray-200 text-sm leading-relaxed">{property.bull_case}</p>
+            {/* Verdict + bull/bear */}
+            <div className="space-y-4 flex flex-col">
+              <div className="rounded-2xl p-6 border flex-1"
+                style={{ background: "var(--bg-surface)", borderColor: "var(--border-subtle)" }}>
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">Verdict</p>
+                <p className="text-slate-200 leading-relaxed">{property.verdict}</p>
+              </div>
+
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="rounded-xl p-5 border border-emerald-500/15 bg-emerald-500/[0.05]">
+                  <div className="flex items-center gap-2 mb-2.5">
+                    <div className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                      <svg className="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                      </svg>
+                    </div>
+                    <p className="text-xs font-semibold text-emerald-400 uppercase tracking-wide">Bull case</p>
+                  </div>
+                  <p className="text-slate-300 text-sm leading-relaxed">{property.bull_case}</p>
+                </div>
+                <div className="rounded-xl p-5 border border-red-500/15 bg-red-500/[0.05]">
+                  <div className="flex items-center gap-2 mb-2.5">
+                    <div className="w-5 h-5 rounded-full bg-red-500/20 flex items-center justify-center">
+                      <svg className="w-3 h-3 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                      </svg>
+                    </div>
+                    <p className="text-xs font-semibold text-red-400 uppercase tracking-wide">Bear case</p>
+                  </div>
+                  <p className="text-slate-300 text-sm leading-relaxed">{property.bear_case}</p>
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="bg-red-900/20 border border-red-800/40 rounded-xl p-4">
-            <p className="text-xs uppercase tracking-widest text-red-400 mb-2">Bear case</p>
-            <p className="text-gray-200 text-sm leading-relaxed">{property.bear_case}</p>
+
+          {/* Subscores */}
+          <div>
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-4">Category breakdown</p>
+            <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
+              {property.subscores.map((s) => (
+                <SubscoreCard key={s.category} category={s.category} score={s.score} summary={s.summary} />
+              ))}
+            </div>
+          </div>
+
+          {/* Original listing */}
+          <div>
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-4">Source data</p>
+            <div className="rounded-xl p-5 border" style={{ background: "var(--bg-surface)", borderColor: "var(--border-subtle)" }}>
+              <pre className="text-slate-500 text-xs leading-relaxed whitespace-pre-wrap font-mono overflow-x-auto">
+                {property.listing_text}
+              </pre>
+            </div>
           </div>
         </div>
-
-        {/* Subscores */}
-        <section>
-          <h3 className="text-xs uppercase tracking-widest text-gray-500 mb-3">Breakdown</h3>
-          <div className="space-y-3">
-            {property.subscores.map((s) => (
-              <SubscoreCard
-                key={s.category}
-                category={s.category}
-                score={s.score}
-                summary={s.summary}
-              />
-            ))}
-          </div>
-        </section>
-
-        {/* Original listing */}
-        <section>
-          <h3 className="text-xs uppercase tracking-widest text-gray-500 mb-3">Original listing</h3>
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-            <p className="text-gray-400 text-sm leading-relaxed whitespace-pre-wrap">
-              {property.listing_text}
-            </p>
-          </div>
-        </section>
       </main>
     </div>
   );

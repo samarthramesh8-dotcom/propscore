@@ -22,7 +22,11 @@
       "Bash(curl -s \"https://www.redfin.com/stingray/do/location-autocomplete?location=38+N+Harbison+Ave+Indianapolis+IN+46219&v=2&auto=true&lat=39.7684&lng=-86.1581\" -H \"User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/124.0.0.0 Safari/537.36\" -H \"Referer: https://www.redfin.com/\" -H \"Accept: */*\" -H \"X-Requested-With: XMLHttpRequest\")",
       "Bash(git init *)",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(git config *)",
+      "Bash(git push *)",
+      "Bash(git remote *)",
+      "Bash(git checkout *)"
     ]
   }
 }

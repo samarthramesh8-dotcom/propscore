@@ -1,43 +1,42 @@
 import Link from "next/link";
 import { Property } from "@/lib/types";
 
-function scoreColor(score: number) {
-  if (score >= 75) return "text-green-400";
-  if (score >= 50) return "text-amber-400";
-  return "text-red-400";
-}
-
-function scoreBg(score: number) {
-  if (score >= 75) return "bg-green-900/40";
-  if (score >= 50) return "bg-amber-900/40";
-  return "bg-red-900/40";
+function scoreMeta(score: number) {
+  if (score >= 75) return { color: "text-emerald-400", bg: "bg-emerald-500/10", ring: "ring-emerald-500/20" };
+  if (score >= 60) return { color: "text-amber-400", bg: "bg-amber-500/10", ring: "ring-amber-500/20" };
+  if (score >= 40) return { color: "text-orange-400", bg: "bg-orange-500/10", ring: "ring-orange-500/20" };
+  return { color: "text-red-400", bg: "bg-red-500/10", ring: "ring-red-500/20" };
 }
 
 export default function PropertyCard({ property }: { property: Property }) {
+  const { color, bg, ring } = scoreMeta(property.overall_score);
   const date = new Date(property.created_at).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
+    month: "short", day: "numeric", year: "numeric",
   });
 
   return (
     <Link
       href={`/property/${property.id}`}
-      className="flex items-center justify-between bg-gray-800 hover:bg-gray-750 border border-gray-700 hover:border-gray-500 rounded-xl px-5 py-4 transition-colors group"
+      className="group flex items-center gap-4 px-5 py-4 rounded-xl border transition-all duration-150 hover:border-white/10 hover:bg-white/[0.02]"
+      style={{ background: "var(--bg-elevated)", borderColor: "var(--border-subtle)" }}
     >
-      <div className="min-w-0 flex-1">
-        <p className="font-medium text-white truncate group-hover:text-blue-400 transition-colors">
+      {/* Score badge */}
+      <div className={`shrink-0 w-12 h-12 rounded-xl flex items-center justify-center ring-1 ${bg} ${ring}`}>
+        <span className={`text-base font-bold tabular-nums ${color}`}>{property.overall_score}</span>
+      </div>
+
+      {/* Info */}
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-white truncate group-hover:text-indigo-300 transition-colors">
           {property.address}
         </p>
-        <p className="text-xs text-gray-500 mt-0.5">{date}</p>
+        <p className="text-xs text-slate-500 mt-0.5">{date}</p>
       </div>
-      <div
-        className={`ml-4 flex-shrink-0 rounded-lg px-3 py-1.5 ${scoreBg(property.overall_score)}`}
-      >
-        <span className={`text-lg font-bold ${scoreColor(property.overall_score)}`}>
-          {property.overall_score}
-        </span>
-      </div>
+
+      {/* Arrow */}
+      <svg className="w-4 h-4 text-slate-600 group-hover:text-slate-400 shrink-0 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+      </svg>
     </Link>
   );
 }
