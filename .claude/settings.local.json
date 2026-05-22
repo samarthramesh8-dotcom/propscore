@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --no-src-dir --import-alias \"@/*\" --yes)",
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --no-src-dir --import-alias \"@/*\" --yes --name real-estate-finder)",
+      "Read(//c/Users/samar/OneDrive/Documents/Claude/Projects/**)",
+      "Bash(npx create-next-app@latest real-estate-finder --typescript --tailwind --eslint --app --no-src-dir --import-alias \"@/*\" --yes)",
+      "Bash(xcopy \"C:\\\\Users\\\\samar\\\\OneDrive\\\\Documents\\\\Claude\\\\Projects\\\\real-estate-finder\" \"C:\\\\Users\\\\samar\\\\OneDrive\\\\Documents\\\\Claude\\\\Projects\\\\Real Estate Finder\" /E /H /Y)",
+      "Bash(rmdir /S /Q \"C:\\\\Users\\\\samar\\\\OneDrive\\\\Documents\\\\Claude\\\\Projects\\\\real-estate-finder\")",
+      "Bash(npm install *)",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "Bash(Rename-Item -Path middleware.ts -NewName proxy.ts)",
+      "PowerShell(Rename-Item -Path \"C:\\\\Users\\\\samar\\\\OneDrive\\\\Documents\\\\Claude\\\\Projects\\\\Real Estate Finder\\\\middleware.ts\" -NewName \"proxy.ts\")",
+      "Bash(curl -s \"https://s.jina.ai/38%20N%20Harbison%20Ave%20Indianapolis%20IN%2046219%20real%20estate%20for%20sale%20price%20beds%20baths\" -H \"Accept: text/plain\")",
+      "Bash(curl -s \"https://r.jina.ai/https://www.realtor.com/realestateandhomes-search/Indianapolis_IN?q=38%20N%20Harbison%20Ave%20Indianapolis%20IN%2046219\" -H \"Accept: text/plain\" -H \"X-Return-Format: markdown\")",
+      "Bash(curl -s \"https://r.jina.ai/https://www.redfin.com/IN/Indianapolis/38-N-Harbison-Ave-46219/home\" -H \"Accept: text/plain\" -H \"X-Return-Format: markdown\")",
+      "Bash(curl -s \"https://r.jina.ai/https://www.redfin.com/city/12459/IN/Indianapolis/filter/property-type=house,condo,multi-family\" -H \"Accept: text/plain\" -H \"X-Return-Format: markdown\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://www.redfin.com/stingray/do/location-autocomplete?location=38+N+Harbison+Ave+Indianapolis+IN+46219&v=2\" -H \"User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36\" -H \"Referer: https://www.redfin.com/\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://www.redfin.com/stingray/api/gis?al=1&num_homes=1&ord=redfin-recommended-asc&page_number=1&sf=1,2,3,5,6,10,11&start=0&status=9&uipt=1,2,3,4,5,6,7,8&v=8&location=38+N+Harbison+Ave+Indianapolis+IN+46219\" -H \"User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/124.0.0.0 Safari/537.36\" -H \"Referer: https://www.redfin.com/\" -H \"Accept: application/json\")",
+      "Bash(curl -s \"https://www.redfin.com/stingray/api/gis?al=1&num_homes=1&ord=redfin-recommended-asc&page_number=1&sf=1,2,3,5,6,10,11&start=0&status=9&uipt=1,2,3,4,5,6,7,8&v=8&location=38+N+Harbison+Ave+Indianapolis+IN+46219\" -H \"User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/124.0.0.0 Safari/537.36\" -H \"Referer: https://www.redfin.com/\" -H \"Accept: application/json\")",
+      "Bash(curl -s \"https://www.redfin.com/stingray/do/location-autocomplete?location=38+N+Harbison+Ave+Indianapolis+IN+46219&v=2&auto=true&lat=39.7684&lng=-86.1581\" -H \"User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/124.0.0.0 Safari/537.36\" -H \"Referer: https://www.redfin.com/\" -H \"Accept: */*\" -H \"X-Requested-With: XMLHttpRequest\")",
+      "Bash(git init *)",
+      "Bash(git add *)",
+      "Bash(git commit *)"
+    ]
+  }
+}
