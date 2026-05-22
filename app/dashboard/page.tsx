@@ -41,7 +41,7 @@ export default async function DashboardPage() {
         {/* Header */}
         <div
           style={{
-            padding: "28px 32px 24px",
+            padding: "28px 36px 24px",
             borderBottom: "1px solid var(--border-subtle)",
           }}
         >
@@ -122,7 +122,7 @@ export default async function DashboardPage() {
         </div>
 
         {/* Content */}
-        <div style={{ padding: "24px 32px" }}>
+        <div style={{ padding: "24px 36px" }}>
           {!count ? (
             /* Empty state */
             <div
@@ -188,7 +188,6 @@ export default async function DashboardPage() {
                 display: "flex",
                 flexDirection: "column",
                 gap: 8,
-                maxWidth: 720,
               }}
             >
               {list.map((property) => (

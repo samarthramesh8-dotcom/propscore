@@ -23,54 +23,61 @@ export default function PropertyCard({ property }: { property: Property }) {
         display: "block",
         background: "var(--bg-surface)",
         borderRadius: 10,
-        padding: "18px 20px",
+        padding: "20px 24px",
         textDecoration: "none",
       }}
     >
-      <div className="flex gap-5 items-start">
-        {/* Score ring — no glow on cards to keep density */}
-        <div className="shrink-0 mt-0.5">
-          <ScoreRing score={property.overall_score} size={56} strokeWidth={5} glow={false} />
+      <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
+        {/* Score ring */}
+        <div style={{ flexShrink: 0 }}>
+          <ScoreRing score={property.overall_score} size={64} strokeWidth={6} glow={false} />
         </div>
 
         {/* Content */}
-        <div className="flex-1 min-w-0">
+        <div style={{ flex: 1, minWidth: 0 }}>
           {/* Address */}
           <p
             className="ps-prop-address"
             style={{
-              fontSize: 13,
+              fontSize: 14,
               fontWeight: 600,
-              margin: "0 0 10px 0",
+              margin: "0 0 12px 0",
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
+              letterSpacing: "-0.01em",
             }}
           >
             {property.address}
           </p>
 
           {/* Compact subscore bars */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 12 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
             {property.subscores.map((s) => (
-              <div key={s.category} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div key={s.category} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {/* Category label — single line, truncated */}
                 <span
                   style={{
-                    fontSize: 9,
+                    fontSize: 10,
                     fontWeight: 600,
-                    letterSpacing: "0.12em",
+                    letterSpacing: "0.1em",
                     textTransform: "uppercase",
                     color: "var(--text-muted)",
-                    width: 64,
+                    width: 100,
                     flexShrink: 0,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
                   }}
                 >
                   {s.category}
                 </span>
+
+                {/* Bar */}
                 <div
                   style={{
                     flex: 1,
-                    height: 3,
+                    height: 4,
                     background: "var(--border-subtle)",
                     borderRadius: 999,
                     overflow: "hidden",
@@ -85,12 +92,15 @@ export default function PropertyCard({ property }: { property: Property }) {
                     }}
                   />
                 </div>
+
+                {/* Score */}
                 <span
                   className="font-mono tabular-nums"
                   style={{
-                    fontSize: 10,
+                    fontSize: 11,
+                    fontWeight: 500,
                     color: "var(--text-secondary)",
-                    width: 20,
+                    width: 22,
                     textAlign: "right",
                     flexShrink: 0,
                   }}
@@ -102,10 +112,10 @@ export default function PropertyCard({ property }: { property: Property }) {
           </div>
 
           {/* Verdict + date */}
-          <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
             <p
               style={{
-                fontSize: 11,
+                fontSize: 12,
                 color: "var(--text-muted)",
                 margin: 0,
                 flex: 1,
@@ -113,6 +123,7 @@ export default function PropertyCard({ property }: { property: Property }) {
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
                 fontStyle: "italic",
+                lineHeight: 1.4,
               }}
             >
               {property.verdict}
@@ -120,7 +131,7 @@ export default function PropertyCard({ property }: { property: Property }) {
             <span
               className="font-mono"
               style={{
-                fontSize: 10,
+                fontSize: 11,
                 color: "var(--text-muted)",
                 flexShrink: 0,
               }}
