@@ -65,11 +65,11 @@ export default async function DashboardPage() {
 
             <Link
               href="/analyze"
+              className="ps-btn-accent"
               style={{
                 display: "flex",
                 alignItems: "center",
                 gap: 6,
-                background: "var(--accent)",
                 color: "#fff",
                 fontSize: 12,
                 fontWeight: 600,
@@ -77,10 +77,7 @@ export default async function DashboardPage() {
                 borderRadius: 7,
                 textDecoration: "none",
                 flexShrink: 0,
-                transition: "background 0.15s ease",
               }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--accent-hover)"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--accent)"; }}
             >
               <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 5v14m7-7H5" />
@@ -172,8 +169,8 @@ export default async function DashboardPage() {
               </p>
               <Link
                 href="/analyze"
+                className="ps-btn-accent"
                 style={{
-                  background: "var(--accent)",
                   color: "#fff",
                   fontSize: 12,
                   fontWeight: 600,

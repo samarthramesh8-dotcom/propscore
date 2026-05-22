@@ -18,20 +18,13 @@ export default function PropertyCard({ property }: { property: Property }) {
   return (
     <Link
       href={`/property/${property.id}`}
-      className="group block"
+      className="ps-prop-card"
       style={{
+        display: "block",
         background: "var(--bg-surface)",
-        border: "1px solid var(--border-subtle)",
         borderRadius: 10,
         padding: "18px 20px",
-        transition: "border-color 0.15s ease",
         textDecoration: "none",
-      }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLElement).style.borderColor = "var(--border-default)";
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLElement).style.borderColor = "var(--border-subtle)";
       }}
     >
       <div className="flex gap-5 items-start">
@@ -44,17 +37,15 @@ export default function PropertyCard({ property }: { property: Property }) {
         <div className="flex-1 min-w-0">
           {/* Address */}
           <p
+            className="ps-prop-address"
             style={{
               fontSize: 13,
               fontWeight: 600,
-              color: "var(--text-primary)",
               margin: "0 0 10px 0",
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
-              transition: "color 0.15s ease",
             }}
-            className="group-hover:text-[var(--accent)]"
           >
             {property.address}
           </p>

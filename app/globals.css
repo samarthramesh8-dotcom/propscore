@@ -75,3 +75,36 @@ body {
 @keyframes ring-draw {
   from { stroke-dashoffset: var(--circumference); }
 }
+
+/* ─── Hover utilities (CSS-only, safe in server components) ─ */
+
+/* Accent CTA button — used on Dashboard "New analysis" link */
+.ps-btn-accent {
+  background: var(--accent);
+  transition: background 0.15s ease;
+}
+.ps-btn-accent:hover { background: var(--accent-hover); }
+
+/* Square icon button — used on Property detail back arrow */
+.ps-icon-btn {
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.ps-icon-btn:hover {
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+/* Property card hover — border brightens, address turns accent */
+.ps-prop-card {
+  border: 1px solid var(--border-subtle);
+  transition: border-color 0.15s ease;
+}
+.ps-prop-card:hover { border-color: var(--border-default); }
+
+.ps-prop-address {
+  color: var(--text-primary);
+  transition: color 0.15s ease;
+}
+.ps-prop-card:hover .ps-prop-address { color: var(--accent); }

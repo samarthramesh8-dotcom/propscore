@@ -54,6 +54,7 @@ export default async function PropertyPage({
         >
           <Link
             href="/dashboard"
+            className="ps-icon-btn"
             style={{
               display: "flex",
               alignItems: "center",
@@ -61,20 +62,9 @@ export default async function PropertyPage({
               width: 28,
               height: 28,
               borderRadius: 6,
-              border: "1px solid var(--border-subtle)",
               background: "var(--bg-surface)",
-              color: "var(--text-secondary)",
               textDecoration: "none",
               flexShrink: 0,
-              transition: "border-color 0.15s, color 0.15s",
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.borderColor = "var(--border-default)";
-              (e.currentTarget as HTMLElement).style.color = "var(--text-primary)";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.borderColor = "var(--border-subtle)";
-              (e.currentTarget as HTMLElement).style.color = "var(--text-secondary)";
             }}
           >
             <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
