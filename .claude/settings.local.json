@@ -23,10 +23,12 @@
       "Bash(git init *)",
       "Bash(git add *)",
       "Bash(git commit *)",
-      "Bash(git config *)",
-      "Bash(git push *)",
-      "Bash(git remote *)",
-      "Bash(git checkout *)"
+      "Bash(gh pr *)",
+      "Bash(where gh *)",
+      "Bash(winget list *)",
+      "Bash(findstr /i \"gh\")",
+      "Bash(git checkout *)",
+      "Bash(git stash *)"
     ]
   }
 }

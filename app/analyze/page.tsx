@@ -4,6 +4,29 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 
+const analysisPoints = [
+  {
+    label: "Price & Value",
+    desc: "List vs Zestimate, price/sqft vs market, days on market",
+  },
+  {
+    label: "Location",
+    desc: "GreatSchools ratings, neighborhood trends, job market proximity",
+  },
+  {
+    label: "Rental yield",
+    desc: "1% rule test, cap rate with 45% expense ratio, rent Zestimate",
+  },
+  {
+    label: "Condition",
+    desc: "Year built, estimated maintenance cost, deferred risk signals",
+  },
+  {
+    label: "Market trends",
+    desc: "Buyer vs seller market, price appreciation direction, DOM trend",
+  },
+];
+
 export default function AnalyzePage() {
   const [listingText, setListingText] = useState("");
   const [loading, setLoading] = useState(false);
@@ -35,50 +58,110 @@ export default function AnalyzePage() {
   }
 
   return (
-    <div className="flex min-h-screen" style={{ background: "var(--bg-base)" }}>
+    <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg-base)" }}>
       <Sidebar />
 
-      <main className="flex-1 flex min-w-0">
-        {/* Form panel */}
-        <div className="flex-1 px-8 py-8 max-w-2xl">
-          <div className="mb-7">
-            <h1 className="text-xl font-semibold text-white">New analysis</h1>
-            <p className="text-slate-500 text-sm mt-0.5">
-              Paste a Zillow URL or full listing text to get an investment score.
+      <main style={{ flex: 1, minWidth: 0, display: "flex" }}>
+        {/* ── Form panel ─────────────────────────────────── */}
+        <div style={{ flex: 1, padding: "28px 32px", maxWidth: 640 }}>
+          <div style={{ marginBottom: 24 }}>
+            <h1
+              style={{
+                fontSize: 16,
+                fontWeight: 700,
+                color: "var(--text-primary)",
+                letterSpacing: "-0.015em",
+                marginBottom: 4,
+              }}
+            >
+              New analysis
+            </h1>
+            <p style={{ fontSize: 12, color: "var(--text-muted)" }}>
+              Paste a Zillow URL or listing text to score the investment potential.
             </p>
           </div>
 
-          <form onSubmit={handleAnalyze} className="space-y-4">
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">
-                  Listing
-                </label>
-                {isZillow && (
-                  <span className="flex items-center gap-1.5 text-xs text-indigo-400 font-medium">
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                    Zillow URL detected — fetching live data
-                  </span>
-                )}
-                {isUrl && !isZillow && (
-                  <span className="text-xs text-slate-500">URL detected</span>
-                )}
-              </div>
-              <textarea
-                value={listingText}
-                onChange={(e) => setListingText(e.target.value)}
-                placeholder="https://www.zillow.com/homedetails/...&#10;&#10;or paste listing text — address, price, beds, baths, description, etc."
-                rows={12}
-                className="w-full rounded-xl px-4 py-3.5 text-sm text-white placeholder-slate-600 border transition-colors focus:outline-none focus:border-indigo-500/60 resize-none leading-relaxed"
-                style={{ background: "var(--bg-surface)", borderColor: "var(--border-default)" }}
-              />
+          <form onSubmit={handleAnalyze}>
+            {/* Label + badge row */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <label
+                style={{
+                  fontSize: 10,
+                  fontWeight: 600,
+                  letterSpacing: "0.12em",
+                  textTransform: "uppercase",
+                  color: "var(--text-muted)",
+                }}
+              >
+                Listing
+              </label>
+
+              {isZillow && (
+                <span
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 5,
+                    fontSize: 10,
+                    fontWeight: 600,
+                    color: "var(--score-green)",
+                    letterSpacing: "0.04em",
+                  }}
+                >
+                  <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  Zillow URL — live data
+                </span>
+              )}
+              {isUrl && !isZillow && (
+                <span style={{ fontSize: 10, color: "var(--text-muted)" }}>URL detected</span>
+              )}
             </div>
 
+            <textarea
+              value={listingText}
+              onChange={(e) => setListingText(e.target.value)}
+              placeholder={
+                "https://www.zillow.com/homedetails/…\n\nor paste listing text — address, price, beds, baths, description"
+              }
+              rows={11}
+              style={{
+                width: "100%",
+                background: "var(--bg-surface)",
+                border: "1px solid var(--border-subtle)",
+                borderRadius: 8,
+                padding: "12px 14px",
+                fontSize: 13,
+                color: "var(--text-primary)",
+                fontFamily: "inherit",
+                resize: "none",
+                outline: "none",
+                lineHeight: 1.6,
+                transition: "border-color 0.15s ease",
+                marginBottom: 12,
+                display: "block",
+              }}
+              onFocus={(e) => { e.target.style.borderColor = "var(--border-default)"; }}
+              onBlur={(e) => { e.target.style.borderColor = "var(--border-subtle)"; }}
+            />
+
             {error && (
-              <div className="flex items-start gap-2.5 rounded-xl px-4 py-3 bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
-                <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 8,
+                  padding: "10px 12px",
+                  background: "rgba(232, 56, 79, 0.08)",
+                  border: "1px solid rgba(232, 56, 79, 0.2)",
+                  borderRadius: 8,
+                  fontSize: 12,
+                  color: "var(--score-red)",
+                  marginBottom: 12,
+                }}
+              >
+                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ flexShrink: 0, marginTop: 1 }}>
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 {error}
@@ -88,53 +171,116 @@ export default function AnalyzePage() {
             <button
               type="submit"
               disabled={loading || !listingText.trim()}
-              className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium rounded-xl py-3 text-sm transition-colors shadow-lg shadow-indigo-900/30 flex items-center justify-center gap-2"
+              style={{
+                width: "100%",
+                background: "var(--accent)",
+                color: "#fff",
+                border: "none",
+                borderRadius: 8,
+                padding: "11px 0",
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: loading || !listingText.trim() ? "not-allowed" : "pointer",
+                opacity: !listingText.trim() ? 0.4 : 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 7,
+                fontFamily: "inherit",
+                transition: "opacity 0.15s ease, background 0.15s ease",
+              }}
+              onMouseEnter={(e) => { if (!loading && listingText.trim()) (e.currentTarget as HTMLElement).style.background = "var(--accent-hover)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--accent)"; }}
             >
               {loading ? (
                 <>
-                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  <svg width="13" height="13" fill="none" viewBox="0 0 24 24" style={{ animation: "spin 0.8s linear infinite" }}>
+                    <circle opacity={0.25} cx={12} cy={12} r={10} stroke="currentColor" strokeWidth={4} />
+                    <path opacity={0.75} fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
                   {isZillow ? "Fetching Zillow data…" : "Analyzing with Claude…"}
                 </>
               ) : (
                 <>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10" />
+                  <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10" />
                   </svg>
                   Analyze investment
                 </>
               )}
             </button>
           </form>
+
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
 
-        {/* Tips panel */}
-        <div className="hidden xl:block w-72 shrink-0 px-6 py-8 border-l" style={{ borderColor: "var(--border-subtle)" }}>
-          <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-4">What we analyze</p>
-          <div className="space-y-4">
-            {[
-              { icon: "💰", title: "Price & Value", desc: "List vs Zestimate, price/sqft vs market, days on market" },
-              { icon: "🏘️", title: "Location", desc: "GreatSchools ratings, neighborhood trends, job market" },
-              { icon: "📈", title: "Rental yield", desc: "1% rule, cap rate calculation, rent Zestimate" },
-              { icon: "🔧", title: "Condition", desc: "Year built, estimated maintenance cost, deferred risk" },
-              { icon: "📊", title: "Market trends", desc: "Buyer vs seller market, appreciation direction" },
-            ].map(({ icon, title, desc }) => (
-              <div key={title} className="flex gap-3">
-                <span className="text-base leading-none mt-0.5">{icon}</span>
-                <div>
-                  <p className="text-sm font-medium text-slate-200">{title}</p>
-                  <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{desc}</p>
-                </div>
+        {/* ── Tips panel ─────────────────────────────────── */}
+        <div
+          className="hidden xl:flex xl:flex-col"
+          style={{
+            width: 256,
+            flexShrink: 0,
+            padding: "28px 24px",
+            borderLeft: "1px solid var(--border-subtle)",
+          }}
+        >
+          <p
+            style={{
+              fontSize: 10,
+              fontWeight: 600,
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              color: "var(--text-muted)",
+              marginBottom: 16,
+            }}
+          >
+            What we score
+          </p>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {analysisPoints.map(({ label, desc }) => (
+              <div key={label}>
+                <p
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: "var(--text-primary)",
+                    marginBottom: 3,
+                  }}
+                >
+                  {label}
+                </p>
+                <p style={{ fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.6 }}>
+                  {desc}
+                </p>
               </div>
             ))}
           </div>
 
-          <div className="mt-8 rounded-xl p-4 border" style={{ background: "var(--bg-elevated)", borderColor: "var(--border-subtle)" }}>
-            <p className="text-xs font-medium text-slate-300 mb-2">Pro tip</p>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              Zillow URLs give the richest data — list price, Zestimate, rent estimate, school ratings, and price history all pulled automatically.
+          <div
+            style={{
+              marginTop: 24,
+              padding: "14px 14px",
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-subtle)",
+              borderRadius: 8,
+            }}
+          >
+            <p
+              style={{
+                fontSize: 10,
+                fontWeight: 600,
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                color: "var(--accent)",
+                marginBottom: 6,
+              }}
+            >
+              Pro tip
+            </p>
+            <p style={{ fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.6 }}>
+              Zillow URLs give the richest analysis — list price, Zestimate, rent estimate, school ratings, and price history all pulled live.
             </p>
           </div>
         </div>

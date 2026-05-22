@@ -1,20 +1,29 @@
 import type { Metadata } from "next";
-import { Geist } from "next/font/google";
+import { Inter, DM_Mono } from "next/font/google";
 import "./globals.css";
 
-const geist = Geist({ subsets: ["latin"] });
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
+
+const dmMono = DM_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-dm-mono",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "PropScore — Real Estate Investment Analyzer",
-  description: "Paste a listing, get an investment score.",
+  description: "Paste a Zillow URL, get a brutally honest investment score.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className={`${geist.className} bg-gray-950 text-white min-h-screen`}>
-        {children}
-      </body>
+    <html lang="en" className={`${inter.variable} ${dmMono.variable}`}>
+      <body>{children}</body>
     </html>
   );
 }
