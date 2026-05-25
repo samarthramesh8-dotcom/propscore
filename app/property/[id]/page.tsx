@@ -5,6 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import ScoreRing from "@/components/ScoreRing";
 import SubscoreCard from "@/components/SubscoreCard";
+import CashFlowChart from "@/components/CashFlowChart";
 import Sidebar from "@/components/Sidebar";
 import { Property } from "@/lib/types";
 
@@ -201,6 +202,23 @@ export default async function PropertyPage({
                 />
               ))}
             </div>
+          </div>
+
+          {/* ── Cash flow projection ─────────────────────── */}
+          <div>
+            <p
+              style={{
+                fontSize: 9,
+                fontWeight: 600,
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                color: "var(--text-muted)",
+                marginBottom: 12,
+              }}
+            >
+              Cash Flow Projection
+            </p>
+            <CashFlowChart listingText={property.listing_text} />
           </div>
 
           {/* ── Bull / Bear ───────────────────────────────── */}
