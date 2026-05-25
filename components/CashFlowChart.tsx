@@ -121,23 +121,30 @@ const LINES = [
 
 export default function CashFlowChart({ listingText }: Props) {
   // ── Parse stored listing_text ────────────────────────────────────────────
-  // Format written by formatZillapiForClaude():
-  //   "List price: $159,900 ($160k)"
-  //   "Rent Zestimate: $1,295/mo"
+  // formatZillapiForClaude() writes raw numbers (no commas), e.g.:
+  //   "List price: $159900 ($160k)"
+  //   "Rent Zestimate: $1295/mo"   ← or "not listed" if Zillow has no estimate
   const listPrice = parseDollar(
     listingText,
     /List price:\s*\$?([\d,]+)/i,
     /Asking price:\s*\$?([\d,]+)/i,
   );
 
-  const monthlyRent = parseDollar(
+  const rentZestimate = parseDollar(
     listingText,
     /Rent Zestimate:\s*\$?([\d,]+)/i,
     /Rent estimate:\s*\$?([\d,]+)/i,
     /Monthly rent:\s*\$?([\d,]+)/i,
   );
 
-  // ── Fallback ─────────────────────────────────────────────────────────────
+  // ── Rent fallback ─────────────────────────────────────────────────────────
+  // Zillow doesn't provide a Rent Zestimate for every property. When it's
+  // missing, estimate at 0.75% of list price per month (a conservative
+  // benchmark commonly used in real estate analysis).
+  const rentIsEstimated = !rentZestimate && !!listPrice;
+  const monthlyRent = rentZestimate ?? (listPrice ? Math.round(listPrice * 0.0075) : null);
+
+  // ── Hard stop: no list price ─────────────────────────────────────────────
   if (!listPrice || !monthlyRent) {
     return (
       <div
@@ -153,9 +160,8 @@ export default function CashFlowChart({ listingText }: Props) {
           Cash flow projection unavailable
         </p>
         <p style={{ fontSize: 11, color: "var(--text-muted)" }}>
-          {!listPrice
-            ? "List price not found in stored listing data."
-            : "Rent Zestimate not found — only available for Zillow URL analyses."}
+          List price not found in stored listing data. Re-analyze this property
+          with a Zillow URL to generate the projection.
         </p>
       </div>
     );
@@ -226,21 +232,41 @@ export default function CashFlowChart({ listingText }: Props) {
         }}
       >
         <div>
-          <p
-            style={{
-              fontSize: 9,
-              fontWeight: 600,
-              letterSpacing: "0.14em",
-              textTransform: "uppercase",
-              color: "var(--text-muted)",
-              marginBottom: 5,
-            }}
-          >
-            15-Year Cash Flow Projection
-          </p>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+            <p
+              style={{
+                fontSize: 9,
+                fontWeight: 600,
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                color: "var(--text-muted)",
+                margin: 0,
+              }}
+            >
+              15-Year Cash Flow Projection
+            </p>
+            {rentIsEstimated && (
+              <span
+                style={{
+                  fontSize: 9,
+                  fontWeight: 600,
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  color: "#F5A623",
+                  background: "rgba(245,166,35,0.1)",
+                  border: "1px solid rgba(245,166,35,0.25)",
+                  borderRadius: 4,
+                  padding: "1px 6px",
+                }}
+              >
+                Rent estimated
+              </span>
+            )}
+          </div>
           <p style={{ fontSize: 11, color: "var(--text-secondary)" }}>
-            ${monthlyRent.toLocaleString()}/mo rent · $
-            {(listPrice / 1000).toFixed(0)}k purchase · 25% down · 7% / 30yr
+            ${monthlyRent.toLocaleString()}/mo rent
+            {rentIsEstimated ? " (0.75% of list price — no Zillow rent estimate available)" : " (Zillow Rent Zestimate)"}
+            {" · "}${(listPrice / 1000).toFixed(0)}k purchase · 25% down · 7% / 30yr
           </p>
         </div>
 
