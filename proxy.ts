@@ -25,12 +25,22 @@ export async function proxy(request: NextRequest) {
   }
 
   // ── 2. Protected pages: check auth with a 5-second timeout ───────────────
+  // Wrap everything in try/catch — if env vars are missing or Supabase is
+  // unreachable, treat as unauthenticated rather than letting the error
+  // propagate and cause a 500 on every protected route.
   let supabaseResponse = NextResponse.next({ request });
+  let user = null;
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
+  try {
+    const url  = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key  = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    if (!url || !key) {
+      console.error("[proxy] NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY is not set");
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
+
+    const supabase = createServerClient(url, key, {
       cookies: {
         getAll() {
           return request.cookies.getAll();
@@ -45,13 +55,8 @@ export async function proxy(request: NextRequest) {
           );
         },
       },
-    }
-  );
+    });
 
-  // Race getUser() against a 5-second timeout so a slow/paused Supabase
-  // project doesn't hang the entire request. On timeout, treat as logged out.
-  let user = null;
-  try {
     const timeout = new Promise<null>((resolve) =>
       setTimeout(() => resolve(null), 5000)
     );
@@ -61,7 +66,7 @@ export async function proxy(request: NextRequest) {
     ]);
     user = authResult;
   } catch {
-    // Network error — treat as unauthenticated, redirect to login.
+    // Network error, invalid key, or paused project — treat as logged out.
     user = null;
   }
 
