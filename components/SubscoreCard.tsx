@@ -4,26 +4,77 @@ interface SubscoreCardProps {
   summary: string;
 }
 
-function barColor(score: number) {
-  if (score >= 75) return "bg-green-500";
-  if (score >= 50) return "bg-amber-500";
-  return "bg-red-500";
+function barColor(score: number): string {
+  if (score >= 75) return "var(--score-green)";
+  if (score >= 50) return "var(--score-amber)";
+  return "var(--score-red)";
 }
 
 export default function SubscoreCard({ category, score, summary }: SubscoreCardProps) {
+  const color = barColor(score);
+
   return (
-    <div className="bg-gray-800 rounded-xl p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <span className="font-medium text-gray-200 text-sm">{category}</span>
-        <span className="text-sm font-bold text-white">{score}</span>
+    <div
+      style={{
+        background: "var(--bg-surface)",
+        border: "1px solid var(--border-subtle)",
+        borderRadius: 10,
+        padding: "16px 18px",
+      }}
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between mb-3">
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 600,
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+            color: "var(--text-muted)",
+          }}
+        >
+          {category}
+        </span>
+        <span
+          className="font-mono font-medium tabular-nums"
+          style={{ fontSize: 17, lineHeight: 1, color, letterSpacing: "-0.01em" }}
+        >
+          {score}
+        </span>
       </div>
-      <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+
+      {/* Progress bar */}
+      <div
+        style={{
+          height: 3,
+          background: "var(--border-subtle)",
+          borderRadius: 999,
+          overflow: "hidden",
+          marginBottom: 12,
+        }}
+      >
         <div
-          className={`h-full rounded-full ${barColor(score)} transition-all duration-500`}
-          style={{ width: `${score}%` }}
+          style={{
+            height: "100%",
+            width: `${score}%`,
+            background: color,
+            borderRadius: 999,
+            transition: "width 0.65s cubic-bezier(0.4, 0, 0.2, 1)",
+          }}
         />
       </div>
-      <p className="text-gray-400 text-xs leading-relaxed">{summary}</p>
+
+      {/* Summary */}
+      <p
+        style={{
+          fontSize: 12,
+          lineHeight: 1.65,
+          color: "var(--text-secondary)",
+          margin: 0,
+        }}
+      >
+        {summary}
+      </p>
     </div>
   );
 }

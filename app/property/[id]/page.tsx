@@ -5,13 +5,21 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import ScoreRing from "@/components/ScoreRing";
 import SubscoreCard from "@/components/SubscoreCard";
+import CashFlowChart from "@/components/CashFlowChart";
+import Sidebar from "@/components/Sidebar";
 import { Property } from "@/lib/types";
 
-export default async function PropertyPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PropertyPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = await params;
   const supabase = await createClient();
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
   const { data } = await supabase
@@ -25,77 +33,450 @@ export default async function PropertyPage({ params }: { params: Promise<{ id: s
 
   const property = data as Property;
   const date = new Date(property.created_at).toLocaleDateString("en-US", {
-    month: "long",
+    month: "short",
     day: "numeric",
     year: "numeric",
   });
 
   return (
-    <div className="min-h-screen">
-      <header className="border-b border-gray-800 bg-gray-950/80 backdrop-blur sticky top-0 z-10">
-        <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-3">
-          <Link href="/dashboard" className="text-gray-400 hover:text-white transition-colors">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg-base)" }}>
+      <Sidebar />
+
+      <main style={{ flex: 1, minWidth: 0, paddingBottom: 64 }}>
+        {/* ── Top bar ──────────────────────────────────────── */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            padding: "16px 28px",
+            borderBottom: "1px solid var(--border-subtle)",
+          }}
+        >
+          <Link
+            href="/dashboard"
+            className="ps-icon-btn"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 28,
+              height: 28,
+              borderRadius: 6,
+              background: "var(--bg-surface)",
+              textDecoration: "none",
+              flexShrink: 0,
+            }}
+          >
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </Link>
-          <h1 className="font-semibold text-white truncate">{property.address}</h1>
-        </div>
-      </header>
 
-      <main className="max-w-3xl mx-auto px-4 py-8 space-y-8">
-        {/* Hero score */}
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 flex flex-col sm:flex-row items-center gap-6">
-          <ScoreRing score={property.overall_score} size={130} strokeWidth={12} />
-          <div className="text-center sm:text-left">
-            <p className="text-xs uppercase tracking-widest text-gray-500 mb-1">Overall score</p>
-            <h2 className="text-xl font-bold text-white">{property.address}</h2>
-            <p className="text-gray-400 text-sm mt-1">Analyzed {date}</p>
+          <div style={{ minWidth: 0 }}>
+            <h1
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: "var(--text-primary)",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                letterSpacing: "-0.01em",
+              }}
+            >
+              {property.address}
+            </h1>
           </div>
-        </div>
 
-        {/* Verdict */}
-        <section>
-          <h3 className="text-xs uppercase tracking-widest text-gray-500 mb-3">Verdict</h3>
-          <p className="text-gray-200 leading-relaxed">{property.verdict}</p>
-        </section>
-
-        {/* Bull / Bear */}
-        <div className="grid sm:grid-cols-2 gap-4">
-          <div className="bg-green-900/20 border border-green-800/40 rounded-xl p-4">
-            <p className="text-xs uppercase tracking-widest text-green-500 mb-2">Bull case</p>
-            <p className="text-gray-200 text-sm leading-relaxed">{property.bull_case}</p>
-          </div>
-          <div className="bg-red-900/20 border border-red-800/40 rounded-xl p-4">
-            <p className="text-xs uppercase tracking-widest text-red-400 mb-2">Bear case</p>
-            <p className="text-gray-200 text-sm leading-relaxed">{property.bear_case}</p>
-          </div>
+          <span
+            className="font-mono"
+            style={{
+              marginLeft: "auto",
+              fontSize: 11,
+              color: "var(--text-muted)",
+              flexShrink: 0,
+            }}
+          >
+            {date}
+          </span>
         </div>
 
-        {/* Subscores */}
-        <section>
-          <h3 className="text-xs uppercase tracking-widest text-gray-500 mb-3">Breakdown</h3>
-          <div className="space-y-3">
-            {property.subscores.map((s) => (
-              <SubscoreCard
-                key={s.category}
-                category={s.category}
-                score={s.score}
-                summary={s.summary}
-              />
-            ))}
-          </div>
-        </section>
+        <div style={{ padding: "28px 28px", display: "flex", flexDirection: "column", gap: 24 }}>
+          {/* ── Hero: score ring + address + verdict ─────── */}
+          <div
+            style={{
+              display: "flex",
+              gap: 32,
+              alignItems: "flex-start",
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-subtle)",
+              borderRadius: 10,
+              padding: "28px 28px",
+            }}
+          >
+            {/* Score ring */}
+            <div style={{ flexShrink: 0 }}>
+              <ScoreRing score={property.overall_score} size={140} strokeWidth={10} glow={true} />
+              <p
+                style={{
+                  textAlign: "center",
+                  fontSize: 9,
+                  fontWeight: 600,
+                  letterSpacing: "0.14em",
+                  textTransform: "uppercase",
+                  color: "var(--text-muted)",
+                  marginTop: 12,
+                }}
+              >
+                Overall score
+              </p>
+            </div>
 
-        {/* Original listing */}
-        <section>
-          <h3 className="text-xs uppercase tracking-widest text-gray-500 mb-3">Original listing</h3>
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-            <p className="text-gray-400 text-sm leading-relaxed whitespace-pre-wrap">
-              {property.listing_text}
+            {/* Right column */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <h2
+                style={{
+                  fontSize: 18,
+                  fontWeight: 800,
+                  color: "var(--text-primary)",
+                  letterSpacing: "-0.025em",
+                  lineHeight: 1.25,
+                  marginBottom: 12,
+                }}
+              >
+                {property.address}
+              </h2>
+
+              <p
+                style={{
+                  fontSize: 9,
+                  fontWeight: 600,
+                  letterSpacing: "0.14em",
+                  textTransform: "uppercase",
+                  color: "var(--text-muted)",
+                  marginBottom: 8,
+                }}
+              >
+                Verdict
+              </p>
+              <p
+                style={{
+                  fontSize: 13,
+                  lineHeight: 1.75,
+                  color: "var(--text-secondary)",
+                }}
+              >
+                {property.verdict}
+              </p>
+            </div>
+          </div>
+
+          {/* ── Subscores 2-col grid ──────────────────────── */}
+          <div>
+            <p
+              style={{
+                fontSize: 9,
+                fontWeight: 600,
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                color: "var(--text-muted)",
+                marginBottom: 12,
+              }}
+            >
+              Category breakdown
             </p>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(2, 1fr)",
+                gap: 8,
+              }}
+            >
+              {property.subscores.map((s) => (
+                <SubscoreCard
+                  key={s.category}
+                  category={s.category}
+                  score={s.score}
+                  summary={s.summary}
+                />
+              ))}
+            </div>
           </div>
-        </section>
+
+          {/* ── Cash flow projection ─────────────────────── */}
+          <div>
+            <p
+              style={{
+                fontSize: 9,
+                fontWeight: 600,
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                color: "var(--text-muted)",
+                marginBottom: 12,
+              }}
+            >
+              Cash Flow Projection
+            </p>
+            <CashFlowChart
+              listingText={property.listing_text}
+              rentcastEstimate={property.rentcast_estimate}
+              mudRate={property.mud_rate}
+            />
+          </div>
+
+          {/* ── Rentcast comparable rentals ───────────────── */}
+          {property.rentcast_comps && property.rentcast_comps.length > 0 && (
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                <p
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 600,
+                    letterSpacing: "0.14em",
+                    textTransform: "uppercase",
+                    color: "var(--text-muted)",
+                    margin: 0,
+                  }}
+                >
+                  Comparable Rentals
+                </p>
+                <span
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 600,
+                    letterSpacing: "0.1em",
+                    textTransform: "uppercase",
+                    color: "#818CF8",
+                    background: "rgba(129,140,248,0.1)",
+                    border: "1px solid rgba(129,140,248,0.25)",
+                    borderRadius: 4,
+                    padding: "1px 6px",
+                  }}
+                >
+                  Rentcast
+                </span>
+              </div>
+              <div
+                style={{
+                  background: "var(--bg-surface)",
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: 10,
+                  overflow: "hidden",
+                }}
+              >
+                {/* Table header */}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 88px 88px 72px 56px",
+                    padding: "10px 18px",
+                    borderBottom: "1px solid var(--border-subtle)",
+                  }}
+                >
+                  {["Address", "Rent / mo", "Bed / Ba", "Sqft", "Dist"].map((h) => (
+                    <span
+                      key={h}
+                      style={{
+                        fontSize: 9,
+                        fontWeight: 600,
+                        letterSpacing: "0.12em",
+                        textTransform: "uppercase",
+                        color: "var(--text-muted)",
+                      }}
+                    >
+                      {h}
+                    </span>
+                  ))}
+                </div>
+                {/* Rows */}
+                {property.rentcast_comps.map((comp, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 88px 88px 72px 56px",
+                      padding: "12px 18px",
+                      borderBottom:
+                        i < property.rentcast_comps!.length - 1
+                          ? "1px solid var(--border-subtle)"
+                          : "none",
+                      alignItems: "center",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 11,
+                        color: "var(--text-secondary)",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        paddingRight: 12,
+                      }}
+                    >
+                      {comp.address}
+                    </span>
+                    <span
+                      className="font-mono"
+                      style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}
+                    >
+                      ${comp.rent.toLocaleString()}
+                    </span>
+                    <span
+                      className="font-mono"
+                      style={{ fontSize: 11, color: "var(--text-secondary)" }}
+                    >
+                      {comp.bedrooms}bd / {comp.bathrooms}ba
+                    </span>
+                    <span
+                      className="font-mono"
+                      style={{ fontSize: 11, color: "var(--text-secondary)" }}
+                    >
+                      {comp.squareFootage ? comp.squareFootage.toLocaleString() : "—"}
+                    </span>
+                    <span
+                      className="font-mono"
+                      style={{ fontSize: 11, color: "var(--text-muted)" }}
+                    >
+                      {comp.distanceMi}mi
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Bull / Bear ───────────────────────────────── */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, 1fr)",
+              gap: 8,
+            }}
+          >
+            {/* Bull case */}
+            <div
+              style={{
+                background: "rgba(0, 210, 106, 0.04)",
+                border: "1px solid rgba(0, 210, 106, 0.15)",
+                borderRadius: 10,
+                padding: "18px 18px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                <div
+                  style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: "50%",
+                    background: "rgba(0, 210, 106, 0.12)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <svg width="9" height="9" fill="none" stroke="var(--score-green)" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                  </svg>
+                </div>
+                <span
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 600,
+                    letterSpacing: "0.14em",
+                    textTransform: "uppercase",
+                    color: "var(--score-green)",
+                  }}
+                >
+                  Bull case
+                </span>
+              </div>
+              <p style={{ fontSize: 12, lineHeight: 1.7, color: "var(--text-secondary)" }}>
+                {property.bull_case}
+              </p>
+            </div>
+
+            {/* Bear case */}
+            <div
+              style={{
+                background: "rgba(232, 56, 79, 0.04)",
+                border: "1px solid rgba(232, 56, 79, 0.15)",
+                borderRadius: 10,
+                padding: "18px 18px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                <div
+                  style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: "50%",
+                    background: "rgba(232, 56, 79, 0.12)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <svg width="9" height="9" fill="none" stroke="var(--score-red)" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                  </svg>
+                </div>
+                <span
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 600,
+                    letterSpacing: "0.14em",
+                    textTransform: "uppercase",
+                    color: "var(--score-red)",
+                  }}
+                >
+                  Bear case
+                </span>
+              </div>
+              <p style={{ fontSize: 12, lineHeight: 1.7, color: "var(--text-secondary)" }}>
+                {property.bear_case}
+              </p>
+            </div>
+          </div>
+
+          {/* ── Source data ───────────────────────────────── */}
+          <div>
+            <p
+              style={{
+                fontSize: 9,
+                fontWeight: 600,
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                color: "var(--text-muted)",
+                marginBottom: 12,
+              }}
+            >
+              Source data
+            </p>
+            <div
+              style={{
+                background: "var(--bg-surface)",
+                border: "1px solid var(--border-subtle)",
+                borderRadius: 10,
+                padding: "16px 18px",
+                overflowX: "auto",
+              }}
+            >
+              <pre
+                className="font-mono"
+                style={{
+                  fontSize: 11,
+                  lineHeight: 1.7,
+                  color: "var(--text-muted)",
+                  whiteSpace: "pre-wrap",
+                  margin: 0,
+                }}
+              >
+                {property.listing_text}
+              </pre>
+            </div>
+          </div>
+        </div>
       </main>
     </div>
   );
