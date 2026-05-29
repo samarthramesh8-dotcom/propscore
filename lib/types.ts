@@ -4,6 +4,15 @@ export interface Subscore {
   summary: string;
 }
 
+export interface RentcastComp {
+  address: string;
+  rent: number;
+  bedrooms: number;
+  bathrooms: number;
+  squareFootage: number;
+  distanceMi: number;
+}
+
 export interface Property {
   id: string;
   user_id: string;
@@ -14,6 +23,9 @@ export interface Property {
   verdict: string;
   bull_case: string;
   bear_case: string;
+  rentcast_estimate: number | null;
+  rentcast_comps: RentcastComp[] | null;
+  mud_rate: number | null;
   created_at: string;
 }
 

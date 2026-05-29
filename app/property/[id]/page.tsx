@@ -218,8 +218,133 @@ export default async function PropertyPage({
             >
               Cash Flow Projection
             </p>
-            <CashFlowChart listingText={property.listing_text} />
+            <CashFlowChart
+              listingText={property.listing_text}
+              rentcastEstimate={property.rentcast_estimate}
+              mudRate={property.mud_rate}
+            />
           </div>
+
+          {/* ── Rentcast comparable rentals ───────────────── */}
+          {property.rentcast_comps && property.rentcast_comps.length > 0 && (
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                <p
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 600,
+                    letterSpacing: "0.14em",
+                    textTransform: "uppercase",
+                    color: "var(--text-muted)",
+                    margin: 0,
+                  }}
+                >
+                  Comparable Rentals
+                </p>
+                <span
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 600,
+                    letterSpacing: "0.1em",
+                    textTransform: "uppercase",
+                    color: "#818CF8",
+                    background: "rgba(129,140,248,0.1)",
+                    border: "1px solid rgba(129,140,248,0.25)",
+                    borderRadius: 4,
+                    padding: "1px 6px",
+                  }}
+                >
+                  Rentcast
+                </span>
+              </div>
+              <div
+                style={{
+                  background: "var(--bg-surface)",
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: 10,
+                  overflow: "hidden",
+                }}
+              >
+                {/* Table header */}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 88px 88px 72px 56px",
+                    padding: "10px 18px",
+                    borderBottom: "1px solid var(--border-subtle)",
+                  }}
+                >
+                  {["Address", "Rent / mo", "Bed / Ba", "Sqft", "Dist"].map((h) => (
+                    <span
+                      key={h}
+                      style={{
+                        fontSize: 9,
+                        fontWeight: 600,
+                        letterSpacing: "0.12em",
+                        textTransform: "uppercase",
+                        color: "var(--text-muted)",
+                      }}
+                    >
+                      {h}
+                    </span>
+                  ))}
+                </div>
+                {/* Rows */}
+                {property.rentcast_comps.map((comp, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 88px 88px 72px 56px",
+                      padding: "12px 18px",
+                      borderBottom:
+                        i < property.rentcast_comps!.length - 1
+                          ? "1px solid var(--border-subtle)"
+                          : "none",
+                      alignItems: "center",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 11,
+                        color: "var(--text-secondary)",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        paddingRight: 12,
+                      }}
+                    >
+                      {comp.address}
+                    </span>
+                    <span
+                      className="font-mono"
+                      style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}
+                    >
+                      ${comp.rent.toLocaleString()}
+                    </span>
+                    <span
+                      className="font-mono"
+                      style={{ fontSize: 11, color: "var(--text-secondary)" }}
+                    >
+                      {comp.bedrooms}bd / {comp.bathrooms}ba
+                    </span>
+                    <span
+                      className="font-mono"
+                      style={{ fontSize: 11, color: "var(--text-secondary)" }}
+                    >
+                      {comp.squareFootage ? comp.squareFootage.toLocaleString() : "—"}
+                    </span>
+                    <span
+                      className="font-mono"
+                      style={{ fontSize: 11, color: "var(--text-muted)" }}
+                    >
+                      {comp.distanceMi}mi
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* ── Bull / Bear ───────────────────────────────── */}
           <div

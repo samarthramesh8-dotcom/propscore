@@ -18,11 +18,13 @@ interface ChartRow {
   "Gross Income": number;
   NOI: number;
   "Cash Flow": number;
+  "Appreciation": number;
+  "MUD Tax"?: number;
 }
 
 interface TooltipProps {
   active?: boolean;
-  payload?: Array<{ name: string; value: number; color: string }>;
+  payload?: Array<{ name: string; value: number; color: string; strokeDasharray?: string }>;
   label?: number;
 }
 
@@ -68,7 +70,7 @@ function CustomTooltip({ active, payload, label }: TooltipProps) {
         border: "1px solid #252535",
         borderRadius: 8,
         padding: "10px 14px",
-        minWidth: 180,
+        minWidth: 190,
       }}
     >
       <p
@@ -111,15 +113,26 @@ function CustomTooltip({ active, payload, label }: TooltipProps) {
 
 interface Props {
   listingText: string;
+  /** Monthly rent estimate from Rentcast API (takes priority over Zillow Zestimate) */
+  rentcastEstimate?: number | null;
+  /**
+   * MUD district rate in dollars per $100 of assessed value.
+   * e.g. 0.95 means $0.95 per $100, so a $300k home pays $2,850/yr.
+   */
+  mudRate?: number | null;
 }
 
 const LINES = [
-  { key: "Gross Income", color: "#00D26A", label: "Gross Income" },
-  { key: "NOI",          color: "#F5A623", label: "NOI" },
-  { key: "Cash Flow",    color: "#E8384F", label: "Cash Flow" },
+  { key: "Gross Income", color: "#00D26A", label: "Gross Income", dashed: false },
+  { key: "NOI",          color: "#F5A623", label: "NOI",          dashed: false },
+  { key: "Cash Flow",    color: "#E8384F", label: "Cash Flow",    dashed: false },
+  { key: "Appreciation", color: "#818CF8", label: "Appreciation", dashed: false },
 ] as const;
 
-export default function CashFlowChart({ listingText }: Props) {
+// MUD line rendered separately (conditional)
+const MUD_LINE = { key: "MUD Tax", color: "#F5A623", label: "MUD Tax" } as const;
+
+export default function CashFlowChart({ listingText, rentcastEstimate, mudRate }: Props) {
   // ── Parse stored listing_text ────────────────────────────────────────────
   // formatZillapiForClaude() writes raw numbers (no commas), e.g.:
   //   "List price: $159900 ($160k)"
@@ -137,12 +150,19 @@ export default function CashFlowChart({ listingText }: Props) {
     /Monthly rent:\s*\$?([\d,]+)/i,
   );
 
-  // ── Rent fallback ─────────────────────────────────────────────────────────
-  // Zillow doesn't provide a Rent Zestimate for every property. When it's
-  // missing, estimate at 0.75% of list price per month (a conservative
-  // benchmark commonly used in real estate analysis).
-  const rentIsEstimated = !rentZestimate && !!listPrice;
-  const monthlyRent = rentZestimate ?? (listPrice ? Math.round(listPrice * 0.0075) : null);
+  // ── Rent source priority: Rentcast → Zillow Zestimate → 0.75% estimate ──
+  // Rentcast is derived from actual comparable rental listings and is the
+  // most reliable figure. The 0.75% fallback is only used when neither
+  // real-world data source has an estimate.
+  const rentSource: "rentcast" | "zillow" | "estimated" =
+    rentcastEstimate ? "rentcast" :
+    rentZestimate    ? "zillow"   :
+    "estimated";
+  const rentIsEstimated = rentSource === "estimated";
+  const monthlyRent =
+    rentcastEstimate ??
+    rentZestimate    ??
+    (listPrice ? Math.round(listPrice * 0.0075) : null);
 
   // ── Hard stop: no list price ─────────────────────────────────────────────
   if (!listPrice || !monthlyRent) {
@@ -167,6 +187,13 @@ export default function CashFlowChart({ listingText }: Props) {
     );
   }
 
+  // ── MUD tax ───────────────────────────────────────────────────────────────
+  // Rate is in $/100 assessed value. We use list price as a proxy for
+  // assessed value. We keep MUD tax flat across all 15 years — MUD rates
+  // often decrease as district debt is paid off, so this is slightly conservative.
+  const hasMud = !!(mudRate && mudRate > 0);
+  const annualMudTaxYr1 = hasMud ? Math.round((mudRate! * listPrice) / 100) : 0;
+
   // ── Mortgage math ────────────────────────────────────────────────────────
   // 25% down, 7% fixed, 30-year amortisation
   const loanAmount   = listPrice * 0.75;
@@ -177,22 +204,31 @@ export default function CashFlowChart({ listingText }: Props) {
 
   // ── 15-year projections ──────────────────────────────────────────────────
   const chartData: ChartRow[] = Array.from({ length: 15 }, (_, i) => {
-    const annualGross = monthlyRent * 12 * Math.pow(1.03, i); // 3% rent growth
-    const egi         = annualGross * 0.95;                    // 5% vacancy
-    const noi         = egi * 0.65;                            // 35% expenses
-    const cashFlow    = noi - annualMort;
-    return {
+    const annualGross  = monthlyRent * 12 * Math.pow(1.03, i); // 3% rent growth
+    const egi          = annualGross * 0.95;                    // 5% vacancy
+    const noi          = egi * 0.65;                            // 35% expenses
+    // Annual appreciation gain on current property value (3% compounding)
+    const appreciation = listPrice * Math.pow(1.03, i) * 0.03;
+    // MUD tax is flat (no growth assumed — rates often decline as bonds are paid off)
+    const mudTax       = hasMud ? annualMudTaxYr1 : 0;
+    const cashFlow     = noi - annualMort - mudTax;
+
+    const row: ChartRow = {
       year: i + 1,
       "Gross Income": Math.round(annualGross),
       NOI:            Math.round(noi),
       "Cash Flow":    Math.round(cashFlow),
+      "Appreciation": Math.round(appreciation),
     };
+    if (hasMud) row["MUD Tax"] = -mudTax; // negative so it plots below zero axis
+    return row;
   });
 
   // ── Summary stats ────────────────────────────────────────────────────────
-  const totalCF       = chartData.reduce((s, d) => s + d["Cash Flow"], 0);
-  const avgCF         = totalCF / 15;
-  const breakEvenYear = chartData.find((d) => d["Cash Flow"] > 0)?.year ?? null;
+  const totalCF           = chartData.reduce((s, d) => s + d["Cash Flow"], 0);
+  const totalAppreciation = chartData.reduce((s, d) => s + d["Appreciation"], 0);
+  const totalReturn       = totalCF + totalAppreciation;
+  const breakEvenYear     = chartData.find((d) => d["Cash Flow"] > 0)?.year ?? null;
 
   const summaryStats = [
     {
@@ -201,16 +237,34 @@ export default function CashFlowChart({ listingText }: Props) {
       positive: totalCF >= 0,
     },
     {
-      label: "Avg Annual Cash Flow",
-      value: usd.format(avgCF),
-      positive: avgCF >= 0,
+      label: "15-Year Appreciation",
+      value: usd.format(totalAppreciation),
+      positive: true,
     },
     {
-      label: "Break-Even Year",
-      value: breakEvenYear ? `Year ${breakEvenYear}` : "Not in 15 yrs",
-      positive: breakEvenYear !== null,
+      label: "Total Return",
+      value: usd.format(totalReturn),
+      positive: totalReturn >= 0,
     },
+    ...(hasMud
+      ? [
+          {
+            label: "MUD Tax / Year",
+            value: usd.format(annualMudTaxYr1),
+            positive: false, // always shown in red — it's a cost
+          },
+        ]
+      : [
+          {
+            label: "Break-Even Year",
+            value: breakEvenYear ? `Year ${breakEvenYear}` : "Not in 15 yrs",
+            positive: breakEvenYear !== null,
+          },
+        ]),
   ];
+
+  // When MUD is active, show break-even in a 5th tile below
+  const showBreakEvenSeparately = hasMud;
 
   return (
     <div
@@ -262,22 +316,80 @@ export default function CashFlowChart({ listingText }: Props) {
                 Rent estimated
               </span>
             )}
+            {rentSource === "rentcast" && (
+              <span
+                style={{
+                  fontSize: 9,
+                  fontWeight: 600,
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  color: "#818CF8",
+                  background: "rgba(129,140,248,0.1)",
+                  border: "1px solid rgba(129,140,248,0.25)",
+                  borderRadius: 4,
+                  padding: "1px 6px",
+                }}
+              >
+                Rentcast
+              </span>
+            )}
+            {hasMud && (
+              <span
+                style={{
+                  fontSize: 9,
+                  fontWeight: 600,
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  color: "#F5A623",
+                  background: "rgba(245,166,35,0.08)",
+                  border: "1px solid rgba(245,166,35,0.3)",
+                  borderRadius: 4,
+                  padding: "1px 6px",
+                }}
+              >
+                MUD ${mudRate}/100
+              </span>
+            )}
           </div>
+
+          {/* Rent source line — shows both estimates when both are available */}
           <p style={{ fontSize: 11, color: "var(--text-secondary)" }}>
-            ${monthlyRent.toLocaleString()}/mo rent
-            {rentIsEstimated ? " (0.75% of list price — no Zillow rent estimate available)" : " (Zillow Rent Zestimate)"}
+            {rentSource === "rentcast" ? (
+              <>
+                <span style={{ color: "#818CF8" }}>${rentcastEstimate!.toLocaleString()}/mo</span>
+                {" "}(Rentcast estimate)
+                {rentZestimate && (
+                  <span style={{ color: "var(--text-muted)" }}>
+                    {" · "}Zillow Zestimate: ${rentZestimate.toLocaleString()}/mo
+                  </span>
+                )}
+              </>
+            ) : rentSource === "zillow" ? (
+              <>${rentZestimate!.toLocaleString()}/mo (Zillow Rent Zestimate)</>
+            ) : (
+              <>${monthlyRent!.toLocaleString()}/mo (0.75% of list price — no rent data available)</>
+            )}
             {" · "}${(listPrice / 1000).toFixed(0)}k purchase · 25% down · 7% / 30yr
           </p>
         </div>
 
         {/* Legend chips */}
-        <div style={{ display: "flex", gap: 14, alignItems: "center", flexShrink: 0 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", flexShrink: 0, justifyContent: "flex-end", maxWidth: 260 }}>
           {LINES.map(({ label, color }) => (
-            <div key={label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <div style={{ width: 18, height: 2, background: color, borderRadius: 1 }} />
+            <div key={label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              <div style={{ width: 16, height: 2, background: color, borderRadius: 1 }} />
               <span style={{ fontSize: 10, color: "#7A7A9A" }}>{label}</span>
             </div>
           ))}
+          {hasMud && (
+            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              {/* Dashed line preview for MUD */}
+              <svg width="16" height="4" viewBox="0 0 16 4">
+                <line x1="0" y1="2" x2="16" y2="2" stroke="#F5A623" strokeWidth="2" strokeDasharray="4 3" />
+              </svg>
+              <span style={{ fontSize: 10, color: "#7A7A9A" }}>MUD Tax</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -318,24 +430,48 @@ export default function CashFlowChart({ listingText }: Props) {
               activeDot={{ r: 3.5, strokeWidth: 0, fill: color }}
             />
           ))}
+
+          {/* MUD Tax line — dashed amber, shown only when a rate was entered */}
+          {hasMud && (
+            <Line
+              key={MUD_LINE.key}
+              type="monotone"
+              dataKey={MUD_LINE.key}
+              stroke={MUD_LINE.color}
+              strokeWidth={1.5}
+              strokeDasharray="5 4"
+              dot={false}
+              activeDot={{ r: 3, strokeWidth: 0, fill: MUD_LINE.color }}
+            />
+          )}
         </LineChart>
       </ResponsiveContainer>
 
       {/* ── Assumptions footnote ─────────────────────────────────────── */}
       <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 8, marginBottom: 20 }}>
-        3% annual rent growth · 5% vacancy · 35% expense ratio ·{" "}
+        3% annual rent growth · 3% annual appreciation · 5% vacancy · 35% expense ratio ·{" "}
         <span className="font-mono">${Math.round(annualMort / 12).toLocaleString()}/mo</span>{" "}
         mortgage ({usd.format(loanAmount)} loan)
+        {hasMud && (
+          <>
+            {" · "}
+            <span style={{ color: "#F5A623" }}>
+              MUD tax{" "}
+              <span className="font-mono">${annualMudTaxYr1.toLocaleString()}/yr</span>
+              {" "}(${mudRate}/100 · flat, no growth assumed)
+            </span>
+          </>
+        )}
       </p>
 
       {/* ── Summary stats ─────────────────────────────────────────────── */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
+          gridTemplateColumns: `repeat(${summaryStats.length}, 1fr)`,
           gap: 1,
           background: "var(--border-subtle)",
-          borderRadius: 8,
+          borderRadius: showBreakEvenSeparately ? "8px 8px 0 0" : 8,
           overflow: "hidden",
         }}
       >
@@ -374,6 +510,45 @@ export default function CashFlowChart({ listingText }: Props) {
           </div>
         ))}
       </div>
+
+      {/* Break-even row — rendered beneath the 4-stat grid when MUD is active */}
+      {showBreakEvenSeparately && (
+        <div
+          style={{
+            background: "var(--bg-elevated)",
+            border: "1px solid var(--border-subtle)",
+            borderTop: "none",
+            borderRadius: "0 0 8px 8px",
+            padding: "12px 16px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <p
+            style={{
+              fontSize: 9,
+              fontWeight: 600,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              color: "var(--text-muted)",
+            }}
+          >
+            Break-Even Year (incl. MUD)
+          </p>
+          <p
+            className="font-mono"
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              letterSpacing: "-0.02em",
+              color: breakEvenYear ? "var(--text-primary)" : "#E8384F",
+            }}
+          >
+            {breakEvenYear ? `Year ${breakEvenYear}` : "Not in 15 yrs"}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

@@ -31,10 +31,13 @@ export default function AnalyzePage() {
   const [listingText, setListingText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [mudEnabled, setMudEnabled] = useState(false);
+  const [mudRate, setMudRate] = useState("");
   const router = useRouter();
 
   const isUrl = /^https?:\/\/\S+$/.test(listingText.trim());
   const isZillow = isUrl && /zillow\.com/.test(listingText);
+  const mudRateNum = mudEnabled && mudRate ? parseFloat(mudRate) : null;
 
   async function handleAnalyze(e: React.FormEvent) {
     e.preventDefault();
@@ -46,7 +49,10 @@ export default function AnalyzePage() {
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ listing_text: listingText }),
+        body: JSON.stringify({
+          listing_text: listingText,
+          mud_rate: mudRateNum && mudRateNum > 0 ? mudRateNum : null,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Analysis failed");
@@ -146,6 +152,158 @@ export default function AnalyzePage() {
               onBlur={(e) => { e.target.style.borderColor = "var(--border-subtle)"; }}
             />
 
+            {/* ── MUD District toggle ─────────────────────── */}
+            <div
+              style={{
+                background: "var(--bg-surface)",
+                border: `1px solid ${mudEnabled ? "rgba(245,166,35,0.3)" : "var(--border-subtle)"}`,
+                borderRadius: 8,
+                padding: "14px 16px",
+                marginBottom: 12,
+                transition: "border-color 0.15s ease",
+              }}
+            >
+              {/* Toggle row */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+                <div style={{ minWidth: 0 }}>
+                  <p
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: "var(--text-primary)",
+                      marginBottom: 2,
+                      letterSpacing: "-0.01em",
+                    }}
+                  >
+                    MUD District
+                  </p>
+                  <p style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                    Municipal Utility District tax — common in suburban TX developments
+                  </p>
+                </div>
+
+                {/* Toggle switch */}
+                <button
+                  type="button"
+                  onClick={() => { setMudEnabled(!mudEnabled); if (mudEnabled) setMudRate(""); }}
+                  aria-pressed={mudEnabled}
+                  style={{
+                    flexShrink: 0,
+                    width: 36,
+                    height: 20,
+                    borderRadius: 10,
+                    border: "none",
+                    background: mudEnabled ? "#F5A623" : "var(--border-default)",
+                    position: "relative",
+                    cursor: "pointer",
+                    transition: "background 0.2s ease",
+                    padding: 0,
+                  }}
+                >
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: 3,
+                      left: mudEnabled ? 19 : 3,
+                      width: 14,
+                      height: 14,
+                      borderRadius: "50%",
+                      background: "#fff",
+                      transition: "left 0.2s ease",
+                      display: "block",
+                    }}
+                  />
+                </button>
+              </div>
+
+              {/* Rate input — visible when enabled */}
+              {mudEnabled && (
+                <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--border-subtle)" }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: 10,
+                      fontWeight: 600,
+                      letterSpacing: "0.12em",
+                      textTransform: "uppercase",
+                      color: "var(--text-muted)",
+                      marginBottom: 8,
+                    }}
+                  >
+                    MUD Rate
+                  </label>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    {/* Input with prefix/suffix */}
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        background: "var(--bg-elevated)",
+                        border: "1px solid var(--border-subtle)",
+                        borderRadius: 6,
+                        overflow: "hidden",
+                        flex: 1,
+                      }}
+                    >
+                      <span
+                        style={{
+                          padding: "0 10px",
+                          fontSize: 12,
+                          color: "var(--text-muted)",
+                          fontFamily: "var(--font-dm-mono, monospace)",
+                          borderRight: "1px solid var(--border-subtle)",
+                          height: 36,
+                          display: "flex",
+                          alignItems: "center",
+                          flexShrink: 0,
+                        }}
+                      >
+                        $
+                      </span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="10"
+                        placeholder="0.95"
+                        value={mudRate}
+                        onChange={(e) => setMudRate(e.target.value)}
+                        style={{
+                          flex: 1,
+                          background: "transparent",
+                          border: "none",
+                          outline: "none",
+                          padding: "0 10px",
+                          fontSize: 13,
+                          color: "var(--text-primary)",
+                          fontFamily: "var(--font-dm-mono, monospace)",
+                          height: 36,
+                        }}
+                      />
+                      <span
+                        style={{
+                          padding: "0 10px",
+                          fontSize: 11,
+                          color: "var(--text-muted)",
+                          borderLeft: "1px solid var(--border-subtle)",
+                          height: 36,
+                          display: "flex",
+                          alignItems: "center",
+                          flexShrink: 0,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        per $100 assessed
+                      </span>
+                    </div>
+                  </div>
+                  <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 6 }}>
+                    e.g. $0.95 means $950/yr per $100k of home value · Find yours on the county appraisal district site
+                  </p>
+                </div>
+              )}
+            </div>
+
             {error && (
               <div
                 style={{
@@ -198,7 +356,7 @@ export default function AnalyzePage() {
                     <circle opacity={0.25} cx={12} cy={12} r={10} stroke="currentColor" strokeWidth={4} />
                     <path opacity={0.75} fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  {isZillow ? "Fetching Zillow data…" : "Analyzing with Claude…"}
+                  {isZillow ? "Fetching Zillow + Rentcast data…" : "Analyzing with Claude…"}
                 </>
               ) : (
                 <>

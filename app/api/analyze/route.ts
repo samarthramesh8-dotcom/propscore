@@ -2,6 +2,29 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 
+// ─── Rentcast types ───────────────────────────────────────────────────────────
+
+export interface RentcastComp {
+  address: string;
+  rent: number;
+  bedrooms: number;
+  bathrooms: number;
+  squareFootage: number;
+  distanceMi: number;
+}
+
+interface RentcastResult {
+  estimate: number;
+  rentRangeLow: number;
+  rentRangeHigh: number;
+  comparables: RentcastComp[];
+}
+
+interface AnalysisInput {
+  listingText: string;
+  rentcast: RentcastResult | null;
+}
+
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const SYSTEM_PROMPT = `You are a brutally honest real estate investment analyst. Your job is to find deals and warn against bad ones — you do NOT flatter listings. Every score must be earned with evidence.
@@ -46,9 +69,12 @@ CATEGORY RULES (cite specific numbers in every summary):
    - A "beautiful home" in an overpriced market still gets a low score here
 
 3. Rental Income Potential
-   - Estimate gross monthly rent (use 0.8–1.0% of purchase price as a rough 1% rule benchmark)
-   - Calculate: does it meet the 1% rule? (monthly rent ≥ 1% of price = strong; <0.7% = weak)
+   - IMPORTANT: If a "RENTCAST RENT ESTIMATE" section is present in the data, use that figure as your primary rent benchmark — it is derived from actual comparable rental listings and is more reliable than algorithmic estimates
+   - If both Rentcast and Zillow Rent Zestimate are provided, cite both and note any discrepancy
+   - If neither is available, estimate gross monthly rent using 0.8–1.0% of purchase price as a rough benchmark
+   - Calculate: does the rent meet the 1% rule? (monthly rent ≥ 1% of price = strong; <0.7% = weak)
    - Estimate cap rate: assume 45% expense ratio (taxes + insurance + maintenance + vacancy + mgmt); cap rate = (annual rent × 0.55) ÷ price × 100
+   - IMPORTANT: If a "MUD TAX" section is present, the annual MUD tax is an additional fixed cost on top of the standard expense ratio. Deduct the stated annual MUD tax from NOI when computing cap rate and cash flow — cite the MUD tax amount explicitly (e.g. "MUD tax of $2,850/yr reduces effective cap rate from X% to Y%")
    - Flag explicitly if cap rate < 5%: "This will not cash flow without significant appreciation"
    - Factor in HOA fees — they directly kill cash flow
 
@@ -187,8 +213,97 @@ function formatZillapiForClaude(json: any, url: string): string {
   return lines.join("\n");
 }
 
+// ─── Rentcast ─────────────────────────────────────────────────────────────────
+
+async function fetchRentcastEstimate(
+  address: string,
+  city: string,
+  state: string,
+  zip?: string,
+  beds?: number,
+  baths?: number,
+  sqft?: number,
+): Promise<RentcastResult | null> {
+  const apiKey = process.env.RENTCAST_API_KEY;
+  if (!apiKey || apiKey === "your_rentcast_api_key") return null;
+
+  const params = new URLSearchParams({ address, city, state });
+  if (zip)   params.set("zipCode", zip);
+  if (beds)  params.set("bedrooms", String(beds));
+  if (baths) params.set("bathrooms", String(baths));
+  if (sqft)  params.set("squareFootage", String(Math.round(sqft)));
+
+  try {
+    const res = await fetch(
+      `https://api.rentcast.io/v1/avm/rent/long-term?${params}`,
+      {
+        headers: {
+          "X-Api-Key": apiKey,
+          Accept: "application/json",
+        },
+      }
+    );
+    if (!res.ok) return null;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const json: any = await res.json();
+
+    return {
+      estimate:      Math.round(json.rent         ?? 0),
+      rentRangeLow:  Math.round(json.rentRangeLow ?? 0),
+      rentRangeHigh: Math.round(json.rentRangeHigh ?? 0),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      comparables: ((json.comparables ?? []) as any[]).slice(0, 5).map((c) => ({
+        address:       c.formattedAddress ?? c.addressLine1 ?? "",
+        rent:          Math.round(c.price ?? c.rent ?? 0),
+        bedrooms:      c.bedrooms    ?? 0,
+        bathrooms:     c.bathrooms   ?? 0,
+        squareFootage: c.squareFootage ?? 0,
+        distanceMi:    Math.round((c.distance ?? 0) * 10) / 10,
+      })),
+    };
+  } catch {
+    return null; // network error — analysis continues without Rentcast
+  }
+}
+
+function formatRentcastForClaude(rc: RentcastResult): string {
+  const lines = [
+    ``,
+    `=== RENTCAST RENT ESTIMATE ===`,
+    `Estimated monthly rent: $${rc.estimate.toLocaleString()}/mo`,
+    `Confidence range: $${rc.rentRangeLow.toLocaleString()}–$${rc.rentRangeHigh.toLocaleString()}/mo`,
+  ];
+  if (rc.comparables.length > 0) {
+    lines.push(`Comparable rentals (active/recent listings):`);
+    rc.comparables.forEach((c) => {
+      lines.push(
+        `  • ${c.address}: $${c.rent.toLocaleString()}/mo, ` +
+        `${c.bedrooms}bd/${c.bathrooms}ba, ${c.squareFootage}sqft (${c.distanceMi}mi away)`
+      );
+    });
+  }
+  return lines.join("\n");
+}
+
+// ─── MUD district ─────────────────────────────────────────────────────────────
+
+function formatMudForClaude(mudRate: number): string {
+  return [
+    ``,
+    `=== MUD TAX (MUNICIPAL UTILITY DISTRICT) ===`,
+    `MUD rate: $${mudRate.toFixed(4)} per $100 of assessed value`,
+    `NOTE: This is an additional annual tax charged by the MUD district on top of standard county/city property taxes.`,
+    `It funds utility infrastructure (water, sewer, drainage) and is common in suburban Texas master-planned communities.`,
+    `To calculate the annual MUD tax: (list price ÷ 100) × MUD rate.`,
+    `Deduct this from NOI when calculating effective cap rate and annual cash flow.`,
+  ].join("\n");
+}
+
+// ─── Zillow via Zillapi ───────────────────────────────────────────────────────
+
 // Zillapi — wraps Zillow's data. 1 credit per call. 100 free credits at zillapi.com/signup.
-async function fetchViaZillapi(zillowUrl: string): Promise<string> {
+async function fetchViaZillapi(zillowUrl: string): Promise<AnalysisInput> {
   const apiKey = process.env.ZILLAPI_KEY;
   if (!apiKey || apiKey === "your_zillapi_key") {
     throw new Error("ZILLAPI_KEY not configured — get a free key at zillapi.com/signup");
@@ -211,16 +326,37 @@ async function fetchViaZillapi(zillowUrl: string): Promise<string> {
     throw new Error(json.detail || json.error || `Zillapi error ${res.status}`);
   }
 
-  return formatZillapiForClaude(json, zillowUrl);
+  // Extract address components to pass to Rentcast
+  const d = json?.data ?? json;
+  const streetAddress = dig(d, "streetAddress", "street_address", "address") as string | undefined;
+  const city          = dig(d, "city")                                         as string | undefined;
+  const state         = dig(d, "state")                                        as string | undefined;
+  const zip           = dig(d, "zipcode", "zip", "postal_code")                as string | undefined;
+  const beds          = dig(d, "bedrooms", "beds", "bedroom_count")            as number | undefined;
+  const baths         = dig(d, "bathrooms", "baths", "bathroom_count")         as number | undefined;
+  const sqft          = dig(d, "livingArea", "sqft", "squareFootage",
+                             "living_area", "finished_sq_ft")                  as number | undefined;
+
+  // Fire Rentcast lookup concurrently with formatting
+  const rentcastPromise = (streetAddress && city && state)
+    ? fetchRentcastEstimate(streetAddress, city, state, zip, beds, baths, sqft)
+    : Promise.resolve(null);
+
+  const [rentcast] = await Promise.all([rentcastPromise]);
+
+  const zillapiText = formatZillapiForClaude(json, zillowUrl);
+  const listingText = zillapiText + (rentcast ? formatRentcastForClaude(rentcast) : "");
+
+  return { listingText, rentcast };
 }
 
-async function fetchListingFromUrl(url: string): Promise<string> {
+async function fetchListingFromUrl(url: string): Promise<AnalysisInput> {
   // Any zillow.com URL → Zillapi (handles homedetails, search results, etc.)
   if (/zillow\.com/.test(url)) {
     return fetchViaZillapi(url);
   }
 
-  // Non-Zillow URL — try Jina as best-effort
+  // Non-Zillow URL — try Jina as best-effort (no Rentcast without structured address)
   const res = await fetch(`https://r.jina.ai/${url}`, {
     headers: { Accept: "text/plain", "X-Return-Format": "markdown" },
   });
@@ -231,7 +367,7 @@ async function fetchListingFromUrl(url: string): Promise<string> {
   if (text.trim().length < 150) {
     throw new Error("Not enough content at that URL. Try pasting the listing text directly.");
   }
-  return `Source URL: ${url}\n\n${text.slice(0, 15000)}`;
+  return { listingText: `Source URL: ${url}\n\n${text.slice(0, 15000)}`, rentcast: null };
 }
 
 function parseClaudeJson(raw: string): Record<string, unknown> {
@@ -263,22 +399,30 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    let { listing_text } = body;
+    const rawInput: string = body.listing_text;
+    const mudRate: number | null =
+      typeof body.mud_rate === "number" && body.mud_rate > 0 ? body.mud_rate : null;
 
-    if (!listing_text?.trim()) {
+    if (!rawInput?.trim()) {
       return NextResponse.json({ error: "listing_text is required" }, { status: 400 });
     }
 
-    // If the user pasted a URL, fetch the listing data from it
-    if (URL_RE.test(listing_text.trim())) {
-      listing_text = await fetchListingFromUrl(listing_text.trim());
-    }
+    // If the user pasted a URL, fetch the listing data (+ Rentcast) from it.
+    // Otherwise treat the raw text as the listing and skip Rentcast.
+    const { listingText: zillapiText, rentcast } = URL_RE.test(rawInput.trim())
+      ? await fetchListingFromUrl(rawInput.trim())
+      : { listingText: rawInput, rentcast: null };
+
+    // Append MUD tax context when the user provided a rate
+    const listingText = mudRate
+      ? zillapiText + formatMudForClaude(mudRate)
+      : zillapiText;
 
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 2048,
       system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: listing_text }],
+      messages: [{ role: "user", content: listingText }],
     });
 
     const content = message.content[0];
@@ -288,30 +432,75 @@ export async function POST(request: NextRequest) {
 
     const analysis = parseClaudeJson(content.text);
 
-    const { data, error } = await supabase
+    // Base columns every analysis needs
+    const baseInsert = {
+      user_id:       user.id,
+      address:       analysis.address,
+      listing_text:  listingText,
+      overall_score: analysis.overall_score,
+      subscores:     analysis.subscores,
+      verdict:       analysis.verdict,
+      bull_case:     analysis.bull_case,
+      bear_case:     analysis.bear_case,
+    };
+
+    // Attempt full insert with all columns (requires migration to have been run)
+    let { data, error } = await supabase
       .from("properties")
       .insert({
-        user_id: user.id,
-        address: analysis.address,
-        listing_text,
-        overall_score: analysis.overall_score,
-        subscores: analysis.subscores,
-        verdict: analysis.verdict,
-        bull_case: analysis.bull_case,
-        bear_case: analysis.bear_case,
+        ...baseInsert,
+        rentcast_estimate: rentcast?.estimate ?? null,
+        rentcast_comps:    rentcast?.comparables ?? null,
+        mud_rate:          mudRate,
       })
       .select("id")
       .single();
 
-    if (error) throw error;
+    // PostgreSQL error code 42703 = "undefined_column" — migration not yet run.
+    // Fall back to base columns so the analysis still saves successfully.
+    if (error?.code === "42703") {
+      console.warn(
+        "/api/analyze: new columns missing — run the DB migration. " +
+        "Falling back to base insert without rentcast/mud fields."
+      );
+      const fallback = await supabase
+        .from("properties")
+        .insert(baseInsert)
+        .select("id")
+        .single();
+      data  = fallback.data;
+      error = fallback.error;
+    }
+
+    if (error) {
+      // Supabase errors are plain objects — extract the message before throwing
+      throw new Error(
+        typeof error.message === "string"
+          ? error.message
+          : JSON.stringify(error)
+      );
+    }
 
     return NextResponse.json({
-      property_id: data.id,
+      property_id: data!.id,
       ...analysis,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error("/api/analyze error:", message);
+    // Supabase, fetch, and other non-Error throws land here as plain objects.
+    // Normalise to a string before returning to the client.
+    let message: string;
+    if (err instanceof Error) {
+      message = err.message;
+    } else if (typeof err === "object" && err !== null) {
+      const obj = err as Record<string, unknown>;
+      message =
+        typeof obj.message === "string" ? obj.message :
+        typeof obj.detail  === "string" ? obj.detail  :
+        JSON.stringify(obj);
+    } else {
+      message = String(err);
+    }
+    console.error("/api/analyze error:", err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
