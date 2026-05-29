@@ -28,7 +28,13 @@
       "Bash(winget list *)",
       "Bash(findstr /i \"gh\")",
       "Bash(git checkout *)",
-      "Bash(git stash *)"
+      "Bash(git stash *)",
+      "Bash(git merge forgot-password --no-ff -m ' *)",
+      "Bash(git push *)",
+      "Bash(ls *.ts *.tsx)",
+      "Bash(ls middleware*)",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "Bash(gh api *)"
     ]
   }
 }
