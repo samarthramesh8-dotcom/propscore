@@ -42,9 +42,10 @@ export default async function PropertyPage({
     <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg-base)" }}>
       <Sidebar />
 
-      <main style={{ flex: 1, minWidth: 0, paddingBottom: 64 }}>
+      <main className="ps-page-main" style={{ flex: 1, minWidth: 0, paddingBottom: 64 }}>
         {/* ── Top bar ──────────────────────────────────────── */}
         <div
+          className="ps-property-topbar"
           style={{
             display: "flex",
             alignItems: "center",
@@ -102,9 +103,10 @@ export default async function PropertyPage({
           </span>
         </div>
 
-        <div style={{ padding: "28px 28px", display: "flex", flexDirection: "column", gap: 24 }}>
+        <div className="ps-property-content" style={{ padding: "28px 28px", display: "flex", flexDirection: "column", gap: 24 }}>
           {/* ── Hero: score ring + address + verdict ─────── */}
           <div
+            className="ps-hero-layout"
             style={{
               display: "flex",
               gap: 32,
@@ -187,6 +189,7 @@ export default async function PropertyPage({
               Category breakdown
             </p>
             <div
+              className="ps-grid-2col"
               style={{
                 display: "grid",
                 gridTemplateColumns: "repeat(2, 1fr)",
@@ -262,9 +265,10 @@ export default async function PropertyPage({
                   background: "var(--bg-surface)",
                   border: "1px solid var(--border-subtle)",
                   borderRadius: 10,
-                  overflow: "hidden",
+                  overflowX: "auto",
                 }}
               >
+                <div style={{ minWidth: 460 }}>
                 {/* Table header */}
                 <div
                   style={{
@@ -342,12 +346,14 @@ export default async function PropertyPage({
                     </span>
                   </div>
                 ))}
+                </div>{/* /minWidth wrapper */}
               </div>
             </div>
           )}
 
           {/* ── Bull / Bear ───────────────────────────────── */}
           <div
+            className="ps-grid-2col"
             style={{
               display: "grid",
               gridTemplateColumns: "repeat(2, 1fr)",

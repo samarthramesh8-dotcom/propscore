@@ -277,6 +277,7 @@ export default function CashFlowChart({ listingText, rentcastEstimate, mudRate }
     >
       {/* ── Header ───────────────────────────────────────────────────── */}
       <div
+        className="ps-chart-header"
         style={{
           display: "flex",
           alignItems: "flex-start",
@@ -374,7 +375,7 @@ export default function CashFlowChart({ listingText, rentcastEstimate, mudRate }
         </div>
 
         {/* Legend chips */}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", flexShrink: 0, justifyContent: "flex-end", maxWidth: 260 }}>
+        <div className="ps-chart-legend" style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", flexShrink: 0, justifyContent: "flex-end", maxWidth: 260 }}>
           {LINES.map(({ label, color }) => (
             <div key={label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
               <div style={{ width: 16, height: 2, background: color, borderRadius: 1 }} />
@@ -466,6 +467,7 @@ export default function CashFlowChart({ listingText, rentcastEstimate, mudRate }
 
       {/* ── Summary stats ─────────────────────────────────────────────── */}
       <div
+        className="ps-chart-stats-grid"
         style={{
           display: "grid",
           gridTemplateColumns: `repeat(${summaryStats.length}, 1fr)`,

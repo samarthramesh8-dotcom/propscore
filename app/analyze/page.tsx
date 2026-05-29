@@ -67,9 +67,9 @@ export default function AnalyzePage() {
     <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg-base)" }}>
       <Sidebar />
 
-      <main style={{ flex: 1, minWidth: 0, display: "flex" }}>
+      <main className="ps-page-main" style={{ flex: 1, minWidth: 0, display: "flex" }}>
         {/* ── Form panel ─────────────────────────────────── */}
-        <div style={{ flex: 1, padding: "28px 32px", maxWidth: 640 }}>
+        <div className="ps-analyze-form" style={{ flex: 1, padding: "28px 32px", maxWidth: 640 }}>
           <div style={{ marginBottom: 24 }}>
             <h1
               style={{

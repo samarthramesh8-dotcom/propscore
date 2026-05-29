@@ -108,3 +108,73 @@ body {
   transition: color 0.15s ease;
 }
 .ps-prop-card:hover .ps-prop-address { color: var(--accent); }
+
+/* ─── Responsive ─────────────────────────────────────────── */
+
+/* Desktop: sidebar shows as column; bottom nav is hidden */
+.ps-desktop-only { display: flex; }
+.ps-mobile-nav   { display: none; }
+
+@media (max-width: 767px) {
+  /* Hide the desktop sidebar */
+  .ps-desktop-only { display: none !important; }
+
+  /* Show the fixed bottom navigation bar */
+  .ps-mobile-nav {
+    display: flex !important;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    background: var(--bg-surface);
+    border-top: 1px solid var(--border-subtle);
+    height: 60px;
+    align-items: stretch;
+    /* Respect iOS safe-area (home indicator) */
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* Reserve space at the bottom of every page for the bottom nav */
+  .ps-page-main { padding-bottom: 76px !important; }
+
+  /* ── Dashboard ────────────────────────────────────────── */
+  .ps-dashboard-header  { padding: 16px 16px 14px !important; }
+  .ps-dashboard-content { padding: 16px !important; }
+  .ps-stats-row         { gap: 20px !important; }
+
+  /* ── Analyze ──────────────────────────────────────────── */
+  .ps-analyze-form { padding: 16px !important; max-width: 100% !important; }
+
+  /* ── Property detail ──────────────────────────────────── */
+  .ps-property-topbar  { padding: 10px 14px !important; }
+  .ps-property-content { padding: 16px !important; gap: 16px !important; }
+
+  /* Hero card: stack ring + text vertically */
+  .ps-hero-layout {
+    flex-direction: column !important;
+    align-items: center !important;
+    text-align: center !important;
+    gap: 20px !important;
+    padding: 20px 16px !important;
+  }
+
+  /* 2-column grids → single column */
+  .ps-grid-2col { grid-template-columns: 1fr !important; }
+
+  /* ── CashFlow chart ───────────────────────────────────── */
+  .ps-chart-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 10px !important;
+    margin-bottom: 14px !important;
+  }
+  .ps-chart-legend {
+    max-width: 100% !important;
+    justify-content: flex-start !important;
+  }
+  /* 4-stat row → 2×2 grid */
+  .ps-chart-stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}

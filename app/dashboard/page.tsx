@@ -37,9 +37,10 @@ export default async function DashboardPage() {
     <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg-base)" }}>
       <Sidebar />
 
-      <main style={{ flex: 1, minWidth: 0 }}>
+      <main className="ps-page-main" style={{ flex: 1, minWidth: 0 }}>
         {/* Header */}
         <div
+          className="ps-dashboard-header"
           style={{
             padding: "28px 36px 24px",
             borderBottom: "1px solid var(--border-subtle)",
@@ -88,7 +89,7 @@ export default async function DashboardPage() {
 
           {/* Stats row */}
           {count > 0 && (
-            <div style={{ display: "flex", gap: 32, marginTop: 24 }}>
+            <div className="ps-stats-row" style={{ display: "flex", gap: 32, marginTop: 24 }}>
               {stats.map(({ label, value }) => (
                 <div key={label}>
                   <p
@@ -122,7 +123,7 @@ export default async function DashboardPage() {
         </div>
 
         {/* Content */}
-        <div style={{ padding: "24px 36px" }}>
+        <div className="ps-dashboard-content" style={{ padding: "24px 36px" }}>
           {!count ? (
             /* Empty state */
             <div
