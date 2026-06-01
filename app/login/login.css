@@ -242,3 +242,38 @@
 .psl-tos      { font-size: 11px; color: rgba(255,255,255,.18); text-align: center; margin-top: 26px; line-height: 1.65; }
 .psl-tos-link { color: rgba(157,78,221,.7); cursor: pointer; transition: color .15s ease; }
 .psl-tos-link:hover { color: #9D4EDD; }
+
+/* ── "or" divider ── */
+.psl-divider {
+  display: flex; align-items: center; gap: 10px;
+  margin: 20px 0 0;
+  color: rgba(255,255,255,.16); font-size: 11px; font-weight: 500; letter-spacing: .04em;
+}
+.psl-divider::before,
+.psl-divider::after {
+  content: ''; flex: 1; height: 1px;
+  background: rgba(255,255,255,.08);
+}
+
+/* ── Explore as Guest button ── */
+.psl-guest-btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; margin-top: 12px;
+  padding: 13px 0; border-radius: 12px;
+  border: 1px solid rgba(124,58,237,.4);
+  background: transparent;
+  color: #9D4EDD; font-size: 13.5px; font-weight: 600;
+  text-decoration: none; letter-spacing: .02em; font-family: inherit;
+  cursor: pointer;
+  transition: border-color .2s ease, background .2s ease, box-shadow .2s ease, transform .18s ease, color .15s ease;
+}
+.psl-guest-btn:hover {
+  border-color: rgba(157,78,221,.7);
+  background: rgba(124,58,237,.07);
+  box-shadow: 0 0 0 1px rgba(124,58,237,.15), 0 4px 20px rgba(124,58,237,.12);
+  color: #B87DFF;
+  transform: translateY(-1px);
+}
+.psl-guest-btn:active { transform: scale(.98) translateY(0); transition-duration: .08s; }
+.psl-guest-arrow { opacity: .7; transition: transform .2s ease, opacity .15s ease; }
+.psl-guest-btn:hover .psl-guest-arrow { transform: translateX(3px); opacity: 1; }

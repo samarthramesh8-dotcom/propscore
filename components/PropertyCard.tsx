@@ -8,7 +8,13 @@ function barColor(score: number): string {
   return "var(--score-red)";
 }
 
-export default function PropertyCard({ property }: { property: Property }) {
+export default function PropertyCard({
+  property,
+  basePath = "/property",
+}: {
+  property: Property;
+  basePath?: string;
+}) {
   const date = new Date(property.created_at).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -17,7 +23,7 @@ export default function PropertyCard({ property }: { property: Property }) {
 
   return (
     <Link
-      href={`/property/${property.id}`}
+      href={`${basePath}/${property.id}`}
       className="ps-prop-card"
       style={{
         display: "block",
