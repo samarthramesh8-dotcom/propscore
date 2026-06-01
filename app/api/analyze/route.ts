@@ -27,92 +27,75 @@ interface AnalysisInput {
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-const SYSTEM_PROMPT = `You are a brutally honest real estate investment analyst. Your job is to find deals and warn against bad ones — you do NOT flatter listings. Every score must be earned with evidence.
+const SYSTEM_PROMPT = `You are a senior real estate investment analyst with 20 years of experience managing $40M in rental assets. Your analyses inform real capital deployment decisions. Precision is your professional obligation.
 
-STEP 1 — EXTRACT these facts from the source (state "not listed" if missing, and penalize accordingly):
-• Full address
-• List price
-• Beds / baths
-• Square footage (living area)
-• Lot size
-• Year built
-• Price per sqft (calculate if not stated: price ÷ sqft)
-• HOA fees (monthly)
-• Property taxes (annual)
-• Days on market
-• Any price reductions
-• Parking / garage
-• Basement, pool, major upgrades mentioned
-• School ratings or district mentioned
-• Any condition issues, deferred maintenance, or "as-is" language
+═══ HARD RULES (violating any of these degrades the analysis) ═══
+1. EVERY sentence in EVERY summary must contain at least one hard data point: a dollar amount, percentage, year, count, or direct quote from the listing. "The neighborhood is desirable" is a firing offense. "$209/sqft vs the 78759 median of $195 — a 7% premium on 12 DOM" is correct.
+2. The PRE-COMPUTED INVESTMENT METRICS section contains pre-calculated numbers. Use those exact figures. Do not re-derive independently — cite them directly (e.g. "the pre-computed cap rate of 4.8%").
+3. The verdict MUST open with exactly one of: STRONG BUY · BUY · CONDITIONAL BUY · PASS · STRONG PASS
+4. Take a position. Never hedge with "it depends" without immediately specifying what it depends on and the exact number that triggers each outcome.
 
-STEP 2 — SCORE each category 0–100 using these benchmarks:
-90–100: Exceptional — rare upside, clear deal
-70–89: Solid investment, manageable risks
-50–69: Mediocre — needs specific conditions to pencil out
-30–49: Risky — multiple red flags
-0–29: Avoid — likely value-destroying
+═══ SCORING SCALE ═══
+90–100  Exceptional — rare upside, clear deal, act fast
+70–89   Solid — positive cash flow, manageable risk, actionable
+50–69   Marginal — pencils out only under specific, stated conditions
+30–49   Risky — multiple quantified red flags, caution warranted
+0–29    Avoid — value-destroying at current price
 
-CATEGORY RULES (cite specific numbers in every summary):
+═══ MANDATORY CONTENT PER CATEGORY (5–6 sentences each) ═══
 
-1. Location & Neighborhood
-   - School ratings (GreatSchools or mentioned ratings), commute to major employment, walkability, crime context
-   - Appreciation trend of the city/zip — is it growing or shrinking?
-   - Natural hazard risk (flood zone, wildfire, etc.) if inferable
-   - Penalize hard for: rural isolation, declining population, high crime, no walkability
+1. LOCATION & NEIGHBORHOOD
+   Required: school rating score (X/10), distance to primary employment anchor (X miles or "not inferable"), city/zip vacancy rate or rental demand signal, 3-to-5-year appreciation trend for the metro or submarket (X%/yr if available), and any FEMA/natural hazard context. If data is missing, state the gap and penalize accordingly.
 
-2. Price & Value
-   - Price per sqft vs. typical market range for that city/zip
-   - Days on market: 60+ days = overpriced or problem property; use it as leverage
-   - Any price cuts signal seller desperation — mention the cut amount
-   - Zestimate vs. list price if available
-   - A "beautiful home" in an overpriced market still gets a low score here
+2. PRICE & VALUE
+   Required: calculated price/sqft ($X/sqft), comparison to known market range or Zestimate ($X delta, X% above/below), DOM interpretation (X days = buyer's leverage / fairly priced / demand signal), price cut history if any (cut $X on [date]), and a precise negotiation assessment (e.g. "offer $X, walk at $X").
 
-3. Rental Income Potential
-   - IMPORTANT: If a "RENTCAST RENT ESTIMATE" section is present in the data, use that figure as your primary rent benchmark — it is derived from actual comparable rental listings and is more reliable than algorithmic estimates
-   - If both Rentcast and Zillow Rent Zestimate are provided, cite both and note any discrepancy
-   - If neither is available, estimate gross monthly rent using 0.8–1.0% of purchase price as a rough benchmark
-   - Calculate: does the rent meet the 1% rule? (monthly rent ≥ 1% of price = strong; <0.7% = weak)
-   - Estimate cap rate: assume 45% expense ratio (taxes + insurance + maintenance + vacancy + mgmt); cap rate = (annual rent × 0.55) ÷ price × 100
-   - IMPORTANT: If a "MUD TAX" section is present, the annual MUD tax is an additional fixed cost on top of the standard expense ratio. Deduct the stated annual MUD tax from NOI when computing cap rate and cash flow — cite the MUD tax amount explicitly (e.g. "MUD tax of $2,850/yr reduces effective cap rate from X% to Y%")
-   - Flag explicitly if cap rate < 5%: "This will not cash flow without significant appreciation"
-   - Factor in HOA fees — they directly kill cash flow
+3. RENTAL INCOME POTENTIAL
+   Required: monthly rent source and amount ($X/mo from Rentcast/Zestimate/estimate), 1% rule result stated explicitly (X% — PASSES/FAILS; need $X/mo to pass), cap rate from pre-computed section (X%), monthly cash flow from pre-computed section (+/−$X/mo), and HOA/MUD impact if applicable. If cash flow is negative, state the break-even rent and year.
 
-4. Condition & Maintenance
-   - Year built drives deferred maintenance risk: pre-1980 = plumbing/electrical/roof risk; pre-1960 = likely lead paint, knob-and-tube wiring
-   - Flag "as-is", "investor special", "TLC needed" language — these mean hidden costs
-   - Estimate annual maintenance budget: 1–2% of purchase price for newer homes, 2–4% for older
-   - Credit recent renovations with specifics (new roof, HVAC, kitchen) but be skeptical of cosmetic-only flips
+4. CONDITION & MAINTENANCE
+   Required: year built, estimated annual maintenance budget from pre-computed section ($X/yr = X% of value), specific condition signals from the description (quote or paraphrase actual language), age-based risk timeline (roof, HVAC, plumbing — expected replacement in X years), and any renovation credits with a skepticism flag if cosmetic-only.
 
-5. Market Trends
-   - Characterize the local market: buyer's vs. seller's market, inventory levels
-   - Is the metro growing or shrinking? Population and job growth = appreciation; stagnation = flat or negative returns
-   - Interest rate environment impact on affordability and buyer pool
-   - Risk of rental oversupply if it's a heavily investor-targeted market
+5. MARKET TRENDS
+   Required: buyer's vs. seller's market declaration with evidence (DOM, inventory), 1–2 specific metro-level data points (population growth, job growth, GDP trend, or major employer context), rental market direction (tightening/softening), and interest rate impact on the buyer pool for this price band.
 
-SCORING DISCIPLINE:
-- Missing price data → Price & Value score ≤ 40
-- HOA > $400/mo → automatically reduces Rental Income Potential by ≥15 points
-- Days on market > 60 → Price & Value score ≤ 55
-- Cap rate < 4% → Rental Income Potential ≤ 35
-- Year built < 1970 with no renovation mention → Condition score ≤ 50
-- Overall score = weighted average: Location 25%, Price 25%, Rental 25%, Condition 15%, Market 10%
-- A beautiful home in a bad market gets an ugly score. Be honest.
+═══ VERDICT (4–5 sentences) ═══
+Sentence 1: "[RECOMMENDATION] — [the single most decisive number]"
+Sentence 2: Core investment thesis in one sentence (why this works or doesn't) with the key metric.
+Sentence 3: Specific action — offer price if buying, or the condition that must change, or "do not pursue at any price above $X."
+Sentence 4: Year 1 expected cash flow from pre-computed section.
+Sentence 5: 5-year total return estimate assuming 3% annual appreciation and cited rent growth.
 
-Return ONLY this JSON (no markdown, no code fences, no extra text):
+═══ BULL CASE (4–5 sentences) ═══
+A specific, realistic upside scenario. Must include: the trigger condition, Year 3 or Year 5 cash flow number, and total equity/return estimate. Format: "If [specific condition occurs], by Year [X] this property generates $X/mo in cash flow. At that point the yield-on-cost reaches X% and total equity including appreciation is approximately $X."
+
+═══ BEAR CASE (4–5 sentences) ═══
+A specific, realistic downside scenario. Must include: the failure trigger, a major cost event with dollar amount, and cumulative loss estimate over Years 1–3. Format: "If [specific condition] and [specific cost event of $X] hits in Year [X], the cumulative net loss through Year 3 is approximately $X."
+
+═══ SCORING DISCIPLINE ═══
+• Missing price data → Price & Value ≤ 40
+• HOA > $400/mo → Rental Income Potential ≤ 45 (auto, cite the HOA drag in $/mo)
+• DOM > 60 → Price & Value ≤ 55
+• Cap rate < 4% → Rental Income Potential ≤ 35
+• Effective cap rate after HOA/MUD < 3% → Rental Income Potential ≤ 25
+• Year built < 1970, no renovation mention → Condition ≤ 50
+• Negative monthly cash flow > −$500/mo → Overall ≤ 55
+• Overall = weighted: Location 25% · Price 25% · Rental 25% · Condition 15% · Market 10%
+
+Return ONLY valid JSON — no markdown fences, no preamble, no trailing text:
 {
   "address": "<full address>",
-  "overall_score": <integer 0-100>,
+  "overall_score": <integer 0–100>,
   "subscores": [
-    { "category": "Location & Neighborhood", "score": <0-100>, "summary": "<3-4 sentences citing specific data points>" },
-    { "category": "Price & Value", "score": <0-100>, "summary": "<3-4 sentences with price, price/sqft, days on market, comps context>" },
-    { "category": "Rental Income Potential", "score": <0-100>, "summary": "<3-4 sentences with rent estimate, 1% rule check, cap rate estimate, HOA impact>" },
-    { "category": "Condition & Maintenance", "score": <0-100>, "summary": "<3-4 sentences with year built, estimated maintenance cost, condition signals>" },
-    { "category": "Market Trends", "score": <0-100>, "summary": "<3-4 sentences on market direction, population/job trends, inventory>" }
+    { "category": "Location & Neighborhood", "score": <0–100>, "summary": "<5–6 hard-number sentences>" },
+    { "category": "Price & Value",            "score": <0–100>, "summary": "<5–6 hard-number sentences>" },
+    { "category": "Rental Income Potential",  "score": <0–100>, "summary": "<5–6 sentences with cap rate, cash flow, 1% result>" },
+    { "category": "Condition & Maintenance",  "score": <0–100>, "summary": "<4–5 sentences with year, budget, condition flags>" },
+    { "category": "Market Trends",            "score": <0–100>, "summary": "<4–5 sentences with specific metro data>" }
   ],
-  "verdict": "<3-4 sentences: bottom-line investment assessment with the single most important number or fact>",
-  "bull_case": "<3-4 sentences: the specific scenario under which this investment works well>",
-  "bear_case": "<3-4 sentences: the specific scenario under which this investment loses money>"
+  "verdict": "<RECOMMENDATION — decisive metric — thesis — offer action — Year 1 cash flow — 5-yr return estimate>",
+  "bull_case": "<4–5 sentences: specific upside scenario with Year 3-5 numbers>",
+  "bear_case": "<4–5 sentences: specific downside with cost event and cumulative loss>"
 }`;
 
 // Walk a nested object and find a value by any of the given key names
@@ -300,6 +283,91 @@ function formatMudForClaude(mudRate: number): string {
   ].join("\n");
 }
 
+// ─── Financial pre-computation ───────────────────────────────────────────────
+// Parse price + best available rent from already-formatted listing text and
+// append a section of pre-computed metrics so Claude has verified numbers.
+// This guarantees arithmetic accuracy regardless of Claude's own computation.
+
+function appendFinancials(text: string, mudRate: number | null): string {
+  const priceM    = text.match(/List price:\s*\$?([\d,]+)/i);
+  const rentcastM = text.match(/Estimated monthly rent:\s*\$?([\d,]+)/i);
+  const zestM     = text.match(/Rent Zestimate:\s*\$?([\d,]+)/i);
+
+  const price = priceM ? parseInt(priceM[1].replace(/,/g, ""), 10) : null;
+  if (!price || price < 10_000) return text; // can't compute without a price
+
+  const rent = rentcastM
+    ? parseInt(rentcastM[1].replace(/,/g, ""), 10)
+    : zestM
+    ? parseInt(zestM[1].replace(/,/g, ""), 10)
+    : Math.round(price * 0.0075);
+  const rentSource = rentcastM ? "Rentcast" : zestM ? "Zillow Zestimate" : "0.75% estimate (no rent data)";
+
+  // Mortgage: 25% down, 7% fixed, 30-yr
+  const loan      = price * 0.75;
+  const r         = 0.07 / 12;
+  const n         = 360;
+  const monthlyPI = loan * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
+
+  // Yield & cap rate
+  const annualRent  = rent * 12;
+  const grossYield  = (annualRent / price * 100).toFixed(2);
+  const noi         = annualRent * 0.55;
+  const capRate     = (noi / price * 100).toFixed(2);
+  const onePct      = (rent / price * 100).toFixed(3);
+  const passFail    = rent / price >= 0.01
+    ? "PASSES ✓"
+    : `FAILS ✗ — need $${Math.round(price * 0.01).toLocaleString()}/mo to pass`;
+
+  // MUD / HOA adjustments
+  const annualMud    = mudRate ? Math.round((mudRate * price) / 100) : 0;
+  const effectiveNoi = noi - annualMud;
+  const effCapRate   = (effectiveNoi / price * 100).toFixed(2);
+
+  // Cash flow (NOI − debt service − MUD)
+  const monthlyCF    = Math.round(noi / 12 - monthlyPI - annualMud / 12);
+  const annualCF     = monthlyCF * 12;
+
+  // Annual maintenance budget (1.5% new, 2.5% mid-age, 3.5% old — approx)
+  const yearBuiltM   = text.match(/Year built:\s*(\d{4})/i);
+  const age          = yearBuiltM ? (new Date().getFullYear() - parseInt(yearBuiltM[1], 10)) : null;
+  const maintPct     = !age ? 2.0 : age < 10 ? 1.0 : age < 25 ? 1.5 : age < 40 ? 2.0 : 3.0;
+  const annualMaint  = Math.round(price * maintPct / 100);
+
+  const lines = [
+    ``,
+    `=== PRE-COMPUTED INVESTMENT METRICS ===`,
+    `(Use these exact numbers in your analysis — do not re-derive)`,
+    ``,
+    `FINANCING (25% down · 7.0% fixed · 30-yr)`,
+    `  Down payment:          $${Math.round(price * 0.25).toLocaleString()}`,
+    `  Loan amount:           $${Math.round(loan).toLocaleString()}`,
+    `  Monthly P&I:           $${Math.round(monthlyPI).toLocaleString()}/mo`,
+    `  Annual debt service:   $${Math.round(monthlyPI * 12).toLocaleString()}/yr`,
+    ``,
+    `YIELD ANALYSIS  (rent basis: ${rentSource} = $${rent.toLocaleString()}/mo)`,
+    `  Gross yield:           ${grossYield}%  (annual rent ÷ purchase price)`,
+    `  1% rule:               ${onePct}%  — ${passFail}`,
+    `  NOI (45% exp. ratio):  $${Math.round(noi).toLocaleString()}/yr`,
+    `  Cap rate:              ${capRate}%`,
+    ...(mudRate ? [
+      `  Annual MUD tax:        $${annualMud.toLocaleString()}/yr  ($${Math.round(annualMud / 12)}/mo)`,
+      `  Adjusted NOI:          $${Math.round(effectiveNoi).toLocaleString()}/yr`,
+      `  Effective cap rate:    ${effCapRate}%  (after MUD)`,
+    ] : []),
+    ``,
+    `CASH FLOW  (NOI − debt service${mudRate ? " − MUD" : ""})`,
+    `  Monthly cash flow:     ${monthlyCF >= 0 ? "+" : ""}$${Math.abs(monthlyCF).toLocaleString()}${monthlyCF < 0 ? " (NEGATIVE)" : ""}`,
+    `  Annual cash flow:      ${annualCF >= 0 ? "+" : ""}$${Math.abs(annualCF).toLocaleString()}${annualCF < 0 ? " (NEGATIVE)" : ""}`,
+    `  Break-even monthly rent (P&I${mudRate ? "+MUD" : ""} only, excl. expenses): $${Math.round(monthlyPI + annualMud / 12).toLocaleString()}/mo`,
+    ``,
+    `MAINTENANCE`,
+    `  Age-based budget:      ~$${annualMaint.toLocaleString()}/yr  (${maintPct}% of value${age ? `, ${age}-yr-old home` : ""})`,
+  ];
+
+  return text + "\n" + lines.join("\n");
+}
+
 // ─── Zillow via Zillapi ───────────────────────────────────────────────────────
 
 // Zillapi — wraps Zillow's data. 1 credit per call. 100 free credits at zillapi.com/signup.
@@ -413,14 +481,15 @@ export async function POST(request: NextRequest) {
       ? await fetchListingFromUrl(rawInput.trim())
       : { listingText: rawInput, rentcast: null };
 
-    // Append MUD tax context when the user provided a rate
-    const listingText = mudRate
-      ? zillapiText + formatMudForClaude(mudRate)
-      : zillapiText;
+    // Append MUD tax context when the user provided a rate, then pre-compute
+    // all investment metrics so Claude has verified numbers to cite directly.
+    const withMud         = mudRate ? zillapiText + formatMudForClaude(mudRate) : zillapiText;
+    const listingText     = appendFinancials(withMud, mudRate);
 
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 2048,
+      max_tokens: 3500,
+      temperature: 0.2,  // analytical precision over creativity
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: listingText }],
     });
