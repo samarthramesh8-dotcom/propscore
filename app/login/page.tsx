@@ -54,7 +54,7 @@ function ParticleCanvas() {
 
 /* ── House SVG ─────────────────────────────────────────────── */
 function HouseSVG({ drawn }: { drawn: boolean }) {
-  const p = (delay = 0, len = 2000): React.SVGProps<SVGPathElement> => ({
+  const p = (delay = 0, len = 2000): { style: React.CSSProperties } => ({
     style: {
       strokeDasharray: len,
       strokeDashoffset: drawn ? 0 : len,

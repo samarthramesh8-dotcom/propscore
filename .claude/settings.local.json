@@ -29,12 +29,16 @@
       "Bash(findstr /i \"gh\")",
       "Bash(git checkout *)",
       "Bash(git stash *)",
-      "Bash(git merge forgot-password --no-ff -m ' *)",
-      "Bash(git push *)",
-      "Bash(ls *.ts *.tsx)",
-      "Bash(ls middleware*)",
+      "Bash(git merge *)",
       "mcp__Claude_in_Chrome__tabs_context_mcp",
-      "Bash(gh api *)"
+      "Bash(Remove-Item -Recurse -Force \"C:\\\\Users\\\\samar\\\\OneDrive\\\\Documents\\\\Claude\\\\Projects\\\\Real Estate Finder\\\\.next\" -ErrorAction SilentlyContinue)",
+      "Bash(Write-Host \"Cache cleared\")",
+      "Bash(node -e \"console.log\\(require\\('./node_modules/next/package.json'\\).version\\)\")",
+      "Bash(npx next *)",
+      "Bash(curl -s http://localhost:3000/login)",
+      "Bash(vercel --version)",
+      "Bash(git push *)",
+      "Bash(git fetch *)"
     ]
   }
 }
