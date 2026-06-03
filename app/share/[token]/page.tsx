@@ -25,11 +25,14 @@ export default async function SharePage({
   // Public read — anyone can read shared_analyses (USING true policy)
   const { data: share } = await supabase
     .from("shared_analyses")
-    .select("property_id, created_at")
+    .select("property_id, created_at, expires_at")
     .eq("token", token)
     .single();
 
   if (!share) notFound();
+
+  // Treat expired links as not found
+  if (share.expires_at && new Date(share.expires_at) < new Date()) notFound();
 
   // Property is readable because of the "Public: properties readable via share link" policy
   const { data } = await supabase

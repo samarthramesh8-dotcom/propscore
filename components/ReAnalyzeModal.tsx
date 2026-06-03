@@ -22,8 +22,9 @@ export default function ReAnalyzeModal({
   const [text, setText]         = useState(initialText);
   const [mudEnabled, setMudEnabled] = useState(!!initialMudRate);
   const [mudRate, setMudRate]   = useState(initialMudRate ? String(initialMudRate) : "");
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState("");
+  const [loading, setLoading]     = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError]         = useState("");
 
   // Reset on open
   useEffect(() => {
@@ -59,12 +60,17 @@ export default function ReAnalyzeModal({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Re-analysis failed");
 
+      // Keep modal open, show "Refreshing…" while Next.js reloads server data
+      setLoading(false);
+      setRefreshing(true);
+      router.refresh();
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
       onClose();
-      router.refresh(); // reload server component data
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }
 
@@ -122,6 +128,7 @@ export default function ReAnalyzeModal({
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
+              maxLength={20000}
               rows={10}
               style={{
                 width: "100%", background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)",
@@ -190,17 +197,25 @@ export default function ReAnalyzeModal({
           {/* Submit */}
           <button
             type="submit"
-            disabled={loading || !text.trim()}
+            disabled={loading || refreshing || !text.trim()}
             style={{
               width: "100%", background: "var(--accent)", color: "#fff", border: "none",
               borderRadius: 8, padding: "11px 0", fontSize: 13, fontWeight: 600,
-              cursor: loading || !text.trim() ? "not-allowed" : "pointer",
+              cursor: loading || refreshing || !text.trim() ? "not-allowed" : "pointer",
               opacity: !text.trim() ? 0.4 : 1, fontFamily: "inherit",
               display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
               transition: "opacity 0.15s, background 0.15s",
             }}
           >
-            {loading ? (
+            {refreshing ? (
+              <>
+                <svg width="13" height="13" fill="none" viewBox="0 0 24 24" style={{ animation: "spin 0.8s linear infinite" }}>
+                  <circle cx={12} cy={12} r={10} stroke="currentColor" strokeWidth={4} opacity={0.25} />
+                  <path fill="currentColor" opacity={0.75} d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Refreshing…
+              </>
+            ) : loading ? (
               <>
                 <svg width="13" height="13" fill="none" viewBox="0 0 24 24" style={{ animation: "spin 0.8s linear infinite" }}>
                   <circle cx={12} cy={12} r={10} stroke="currentColor" strokeWidth={4} opacity={0.25} />

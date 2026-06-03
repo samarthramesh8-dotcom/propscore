@@ -186,8 +186,7 @@ export default function CashFlowChart({ listingText, rentcastEstimate, mudRate }
 
     const chartData_: ChartRow[] = Array.from({ length: 15 }, (_, i) => {
       const annualGross  = monthlyRent * 12 * Math.pow(1.03, i);
-      const egi          = annualGross * 0.95;
-      const noi          = egi * 0.65;
+      const noi          = annualGross * 0.55;
       const appreciation = listPrice * Math.pow(1.03, i) * 0.03;
       const mudTax       = hasMud_ ? annualMudTaxYr1_ : 0;
       const cashFlow     = noi - annualMort_ - mudTax;
@@ -374,7 +373,7 @@ export default function CashFlowChart({ listingText, rentcastEstimate, mudRate }
 
       {/* ── Assumptions footnote ─────────────────────────────────────── */}
       <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 8, marginBottom: 20 }}>
-        3% annual rent growth · 3% annual appreciation · 5% vacancy · 35% expense ratio ·{" "}
+        3% annual rent growth · 3% annual appreciation · 45% expense ratio ·{" "}
         <span className="font-mono">${Math.round(annualMort / 12).toLocaleString()}/mo</span>{" "}
         mortgage ({usd.format(loanAmount)} loan · {downPct}% down · {rate}%/30yr)
         {hasMud && (

@@ -78,6 +78,11 @@ function exportCSV(properties: Property[]) {
   URL.revokeObjectURL(a.href);
 }
 
+// ─── URL param validation sets ────────────────────────────────────────────────
+
+const VALID_SORT_KEYS    = new Set(["score-desc", "score-asc", "date-desc", "date-asc", "address-asc"]);
+const VALID_FILTER_BANDS = new Set(["all", "strong", "conditional", "pass"]);
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function DashboardClient({ initialList }: { initialList: Property[] }) {
@@ -86,19 +91,21 @@ export default function DashboardClient({ initialList }: { initialList: Property
   const [deleting, setDeleting]       = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [toast, setToast]             = useState<{ msg: string; ok: boolean } | null>(null);
+  const [page, setPage]               = useState(1);
 
-  // Initialise sort/filter from URL on first client render
-  const [sortKey,    setSortKey]    = useState<SortKey>(   () => readUrlParam("sort", "score-desc") as SortKey);
-  const [filterBand, setFilterBand] = useState<FilterBand>(() => readUrlParam("band", "all")        as FilterBand);
+  // Initialise sort/filter from URL on first client render — validated against known values
+  const [sortKey,    setSortKey]    = useState<SortKey>(   () => { const v = readUrlParam("sort", "score-desc"); return (VALID_SORT_KEYS.has(v)    ? v : "score-desc") as SortKey; });
+  const [filterBand, setFilterBand] = useState<FilterBand>(() => { const v = readUrlParam("band", "all");        return (VALID_FILTER_BANDS.has(v) ? v : "all")         as FilterBand; });
   const [search,     setSearch]     = useState(             () => readUrlParam("q",    ""));
 
-  // Sync state → URL (no server round-trip)
+  // Sync state → URL (no server round-trip) + reset pagination when filters change
   useEffect(() => {
     const url = new URL(window.location.href);
     sortKey    !== "score-desc" ? url.searchParams.set("sort", sortKey)    : url.searchParams.delete("sort");
     filterBand !== "all"        ? url.searchParams.set("band", filterBand) : url.searchParams.delete("band");
     search.trim()               ? url.searchParams.set("q",    search)     : url.searchParams.delete("q");
     window.history.replaceState({}, "", url.toString());
+    setPage(1);
   }, [sortKey, filterBand, search]);
 
   const visible = useMemo(
@@ -354,17 +361,48 @@ export default function DashboardClient({ initialList }: { initialList: Property
               </button>
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {visible.map((property) => (
-                <PropertyCard
-                  key={property.id}
-                  property={property}
-                  onDelete={(id) => setDeleteId(id)}
-                  onCompareToggle={toggleCompare}
-                  isCompareSelected={selectedIds.has(property.id)}
-                />
-              ))}
-            </div>
+            <>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {visible.slice(0, page * 20).map((property) => (
+                  <PropertyCard
+                    key={property.id}
+                    property={property}
+                    onDelete={(id) => setDeleteId(id)}
+                    onCompareToggle={toggleCompare}
+                    isCompareSelected={selectedIds.has(property.id)}
+                  />
+                ))}
+              </div>
+              {visible.length > page * 20 && (
+                <div style={{ display: "flex", justifyContent: "center", marginTop: 16 }}>
+                  <button
+                    onClick={() => setPage((p) => p + 1)}
+                    style={{
+                      padding: "8px 20px",
+                      borderRadius: 7,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      border: "1px solid var(--border-subtle)",
+                      background: "transparent",
+                      color: "var(--text-secondary)",
+                      fontFamily: "inherit",
+                      transition: "border-color 0.15s ease, color 0.15s ease",
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLElement).style.borderColor = "var(--border-default)";
+                      (e.currentTarget as HTMLElement).style.color = "var(--text-primary)";
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.borderColor = "var(--border-subtle)";
+                      (e.currentTarget as HTMLElement).style.color = "var(--text-secondary)";
+                    }}
+                  >
+                    Load more ({visible.length - page * 20} remaining)
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </main>

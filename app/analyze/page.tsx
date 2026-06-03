@@ -131,6 +131,7 @@ export default function AnalyzePage() {
               placeholder={
                 "https://www.zillow.com/homedetails/…\n\nor paste listing text — address, price, beds, baths, description"
               }
+              maxLength={20000}
               rows={11}
               style={{
                 width: "100%",

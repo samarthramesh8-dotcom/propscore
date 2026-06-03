@@ -42,8 +42,12 @@ CREATE TABLE IF NOT EXISTS shared_analyses (
   id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   token       text        NOT NULL UNIQUE DEFAULT encode(gen_random_bytes(16), 'hex'),
   property_id uuid        NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
-  created_at  timestamptz NOT NULL DEFAULT now()
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  expires_at  timestamptz NOT NULL DEFAULT (now() + interval '30 days')
 );
+
+-- Add expires_at to existing rows that predate this migration
+ALTER TABLE shared_analyses ADD COLUMN IF NOT EXISTS expires_at timestamptz NOT NULL DEFAULT (now() + interval '30 days');
 
 ALTER TABLE shared_analyses ENABLE ROW LEVEL SECURITY;
 
@@ -56,6 +60,10 @@ CREATE POLICY IF NOT EXISTS "Property owners can create shares"
   WITH CHECK (
     auth.uid() = (SELECT user_id FROM properties WHERE id = property_id)
   );
+
+-- ── Performance indexes ───────────────────────────────────────────────────────
+CREATE INDEX IF NOT EXISTS idx_properties_user_id          ON properties(user_id);
+CREATE INDEX IF NOT EXISTS idx_shared_analyses_property_id ON shared_analyses(property_id);
 
 -- Allow properties to be read publicly when they have a share link
 -- (token is 32 random hex chars — effectively unguessable)

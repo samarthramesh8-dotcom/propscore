@@ -19,6 +19,7 @@ export default function CmdK() {
 
       setToast(true);
       setTimeout(() => setToast(false), 1600);
+      if (window.location.pathname === "/analyze") return;
       router.push("/analyze");
     }
 

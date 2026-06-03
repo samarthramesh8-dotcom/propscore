@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 interface Props {
@@ -13,6 +13,8 @@ export default function NotesField({ propertyId, initialNotes }: Props) {
   const [saved, setSaved]   = useState(false);
   const [error, setError]   = useState(false);
   const [saving, setSaving] = useState(false);
+
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const save = useCallback(async () => {
     if (saving) return;
@@ -33,6 +35,16 @@ export default function NotesField({ propertyId, initialNotes }: Props) {
       setTimeout(() => setSaved(false), 2000);
     }
   }, [propertyId, notes, saving]);
+
+  // Debounced auto-save: fires 500 ms after the user stops typing
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => { save(); }, 500);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notes]);
 
   return (
     <div>
