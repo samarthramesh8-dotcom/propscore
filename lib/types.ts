@@ -26,7 +26,9 @@ export interface Property {
   rentcast_estimate: number | null;
   rentcast_comps: RentcastComp[] | null;
   mud_rate: number | null;
+  notes: string | null;
   created_at: string;
+  updated_at: string | null;
 }
 
 export interface AnalyzeResponse {
@@ -37,4 +39,11 @@ export interface AnalyzeResponse {
   verdict: string;
   bull_case: string;
   bear_case: string;
+}
+
+export interface SharedAnalysis {
+  id: string;
+  token: string;
+  property_id: string;
+  created_at: string;
 }

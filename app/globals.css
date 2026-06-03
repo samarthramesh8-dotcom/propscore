@@ -109,6 +109,124 @@ body {
 }
 .ps-prop-card:hover .ps-prop-address { color: var(--accent); }
 
+/* Delete button — revealed on card hover */
+.ps-delete-btn { opacity: 0; transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease; }
+.ps-prop-card:hover .ps-delete-btn { opacity: 1; }
+.ps-delete-btn:hover { color: var(--score-red) !important; border-color: rgba(232,56,79,0.35) !important; }
+
+/* Ghost button (Export CSV) */
+.ps-btn-ghost {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-family: inherit;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.ps-btn-ghost:hover { border-color: var(--border-default); color: var(--text-primary); }
+
+/* ─── Modal ──────────────────────────────────────────────── */
+.ps-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: fadeIn 0.12s ease;
+}
+
+.ps-modal {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  padding: 24px;
+  width: 100%;
+  max-width: 380px;
+  animation: modalIn 0.15s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.96) translateY(6px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0); }
+}
+
+/* ─── Slide-over panel ───────────────────────────────────── */
+.ps-slideover-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 190;
+  animation: fadeIn 0.15s ease;
+}
+
+.ps-slideover {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(520px, 100vw);
+  background: var(--bg-surface);
+  border-left: 1px solid var(--border-subtle);
+  z-index: 191;
+  overflow-y: auto;
+  animation: slideIn 0.2s cubic-bezier(.25,.46,.45,.94);
+}
+
+@keyframes slideIn {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+/* ─── Toast ──────────────────────────────────────────────── */
+.ps-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 300;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.35);
+  animation: toastIn 0.2s ease;
+  pointer-events: none;
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* ─── Compare bar ────────────────────────────────────────── */
+.ps-compare-bar {
+  position: fixed;
+  bottom: 0;
+  left: 216px;
+  right: 0;
+  z-index: 40;
+}
+
+/* ─── Filter bar / topbar buttons ───────────────────────── */
+@media (max-width: 767px) {
+  .ps-compare-bar      { left: 0; bottom: 60px; }
+  .ps-filter-bar       { padding: 10px 16px !important; }
+  /* Hide button text labels on small screens; keep icons */
+  .ps-topbar-btn-label { display: none; }
+  /* Chart controls wrap more aggressively */
+  .ps-chart-controls   { gap: 8px !important; }
+}
+
 /* ─── Responsive ─────────────────────────────────────────── */
 
 /* Desktop: sidebar shows as column; bottom nav is hidden */

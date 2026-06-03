@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import {
   LineChart,
   Line,
@@ -24,17 +25,29 @@ interface ChartRow {
 
 interface TooltipProps {
   active?: boolean;
-  payload?: Array<{ name: string; value: number; color: string; strokeDasharray?: string }>;
+  payload?: Array<{ name: string; value: number; color: string }>;
   label?: number;
 }
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const RATE_OPTIONS    = [5.5, 6.0, 6.5, 7.0, 7.5, 8.0] as const;
+const DOWN_OPTIONS    = [20, 25, 30]                     as const;
+const DEFAULT_RATE    = 7.0;
+const DEFAULT_DOWN    = 25;
+const AMORT_MONTHS    = 360; // 30-year fixed
+
+const LINES = [
+  { key: "Gross Income", color: "#00D26A" },
+  { key: "NOI",          color: "#F5A623" },
+  { key: "Cash Flow",    color: "#E8384F" },
+  { key: "Appreciation", color: "#818CF8" },
+] as const;
+
+const MUD_LINE = { key: "MUD Tax", color: "#F5A623" } as const;
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/**
- * Parse the first matching dollar amount from listing_text.
- * The stored format from Zillapi is e.g. "List price: $159,900 ($160k)"
- * and "Rent Zestimate: $1,295/mo".
- */
 function parseDollar(text: string, ...patterns: RegExp[]): number | null {
   for (const re of patterns) {
     const m = text.match(re);
@@ -47,7 +60,7 @@ function parseDollar(text: string, ...patterns: RegExp[]): number | null {
 }
 
 function fmtK(v: number): string {
-  const abs = Math.abs(v);
+  const abs  = Math.abs(v);
   const sign = v < 0 ? "-" : "";
   if (abs >= 1000) return `${sign}$${(abs / 1000).toFixed(0)}k`;
   return `${sign}$${abs}`;
@@ -73,34 +86,13 @@ function CustomTooltip({ active, payload, label }: TooltipProps) {
         minWidth: 190,
       }}
     >
-      <p
-        style={{
-          fontSize: 9,
-          fontWeight: 600,
-          letterSpacing: "0.14em",
-          textTransform: "uppercase",
-          color: "#3D3D5C",
-          marginBottom: 8,
-        }}
-      >
+      <p style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.14em", textTransform: "uppercase", color: "#3D3D5C", marginBottom: 8 }}>
         Year {label}
       </p>
       {payload.map((p) => (
-        <div
-          key={p.name}
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 20,
-            marginBottom: 5,
-          }}
-        >
+        <div key={p.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 20, marginBottom: 5 }}>
           <span style={{ fontSize: 11, color: p.color }}>{p.name}</span>
-          <span
-            className="font-mono"
-            style={{ fontSize: 11, color: "#F0F0FF", letterSpacing: "-0.01em" }}
-          >
+          <span className="font-mono" style={{ fontSize: 11, color: "#F0F0FF", letterSpacing: "-0.01em" }}>
             {usd.format(p.value)}
           </span>
         </div>
@@ -109,34 +101,53 @@ function CustomTooltip({ active, payload, label }: TooltipProps) {
   );
 }
 
+// ─── Selector chip ────────────────────────────────────────────────────────────
+
+function Chip({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        height: 24,
+        padding: "0 8px",
+        borderRadius: 4,
+        fontSize: 11,
+        fontWeight: 600,
+        cursor: "pointer",
+        border: `1px solid ${active ? "var(--accent)" : "var(--border-subtle)"}`,
+        background: active ? "rgba(91,91,214,0.12)" : "transparent",
+        color: active ? "var(--accent)" : "var(--text-muted)",
+        fontFamily: "var(--font-dm-mono, monospace)",
+        letterSpacing: "-0.01em",
+        transition: "all 0.12s ease",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 interface Props {
   listingText: string;
-  /** Monthly rent estimate from Rentcast API (takes priority over Zillow Zestimate) */
   rentcastEstimate?: number | null;
-  /**
-   * MUD district rate in dollars per $100 of assessed value.
-   * e.g. 0.95 means $0.95 per $100, so a $300k home pays $2,850/yr.
-   */
   mudRate?: number | null;
 }
 
-const LINES = [
-  { key: "Gross Income", color: "#00D26A", label: "Gross Income", dashed: false },
-  { key: "NOI",          color: "#F5A623", label: "NOI",          dashed: false },
-  { key: "Cash Flow",    color: "#E8384F", label: "Cash Flow",    dashed: false },
-  { key: "Appreciation", color: "#818CF8", label: "Appreciation", dashed: false },
-] as const;
-
-// MUD line rendered separately (conditional)
-const MUD_LINE = { key: "MUD Tax", color: "#F5A623", label: "MUD Tax" } as const;
-
 export default function CashFlowChart({ listingText, rentcastEstimate, mudRate }: Props) {
+  const [rate,    setRate]    = useState<number>(DEFAULT_RATE);
+  const [downPct, setDownPct] = useState<number>(DEFAULT_DOWN);
+
   // ── Parse stored listing_text ────────────────────────────────────────────
-  // formatZillapiForClaude() writes raw numbers (no commas), e.g.:
-  //   "List price: $159900 ($160k)"
-  //   "Rent Zestimate: $1295/mo"   ← or "not listed" if Zillow has no estimate
   const listPrice = parseDollar(
     listingText,
     /List price:\s*\$?([\d,]+)/i,
@@ -150,10 +161,6 @@ export default function CashFlowChart({ listingText, rentcastEstimate, mudRate }
     /Monthly rent:\s*\$?([\d,]+)/i,
   );
 
-  // ── Rent source priority: Rentcast → Zillow Zestimate → 0.75% estimate ──
-  // Rentcast is derived from actual comparable rental listings and is the
-  // most reliable figure. The 0.75% fallback is only used when neither
-  // real-world data source has an estimate.
   const rentSource: "rentcast" | "zillow" | "estimated" =
     rentcastEstimate ? "rentcast" :
     rentZestimate    ? "zillow"   :
@@ -164,18 +171,68 @@ export default function CashFlowChart({ listingText, rentcastEstimate, mudRate }
     rentZestimate    ??
     (listPrice ? Math.round(listPrice * 0.0075) : null);
 
+  // ── Reactive calculations (must be called before any conditional return) ─
+  const computed = useMemo(() => {
+    if (!listPrice || !monthlyRent) return null;
+
+    const hasMud_  = !!(mudRate && mudRate > 0);
+    const annualMudTaxYr1_ = hasMud_ ? Math.round((mudRate! * listPrice) / 100) : 0;
+
+    const loanAmount_   = listPrice * (1 - downPct / 100);
+    const r_monthly     = rate / 100 / 12;
+    const monthlyMort_  = loanAmount_ * (r_monthly * Math.pow(1 + r_monthly, AMORT_MONTHS)) /
+                          (Math.pow(1 + r_monthly, AMORT_MONTHS) - 1);
+    const annualMort_   = monthlyMort_ * 12;
+
+    const chartData_: ChartRow[] = Array.from({ length: 15 }, (_, i) => {
+      const annualGross  = monthlyRent * 12 * Math.pow(1.03, i);
+      const egi          = annualGross * 0.95;
+      const noi          = egi * 0.65;
+      const appreciation = listPrice * Math.pow(1.03, i) * 0.03;
+      const mudTax       = hasMud_ ? annualMudTaxYr1_ : 0;
+      const cashFlow     = noi - annualMort_ - mudTax;
+
+      const row: ChartRow = {
+        year:           i + 1,
+        "Gross Income": Math.round(annualGross),
+        NOI:            Math.round(noi),
+        "Cash Flow":    Math.round(cashFlow),
+        "Appreciation": Math.round(appreciation),
+      };
+      if (hasMud_) row["MUD Tax"] = -mudTax;
+      return row;
+    });
+
+    const totalCF           = chartData_.reduce((s, d) => s + d["Cash Flow"], 0);
+    const totalAppreciation = chartData_.reduce((s, d) => s + d["Appreciation"], 0);
+    const totalReturn       = totalCF + totalAppreciation;
+    const breakEvenYear_    = chartData_.find((d) => d["Cash Flow"] > 0)?.year ?? null;
+
+    const summaryStats_ = [
+      { label: "15-Year Cash Flow",    value: usd.format(totalCF),           positive: totalCF >= 0 },
+      { label: "15-Year Appreciation", value: usd.format(totalAppreciation), positive: true },
+      { label: "Total Return",         value: usd.format(totalReturn),        positive: totalReturn >= 0 },
+      ...(hasMud_
+        ? [{ label: "MUD Tax / Year", value: usd.format(annualMudTaxYr1_), positive: false }]
+        : [{ label: "Break-Even Year", value: breakEvenYear_ ? `Year ${breakEvenYear_}` : "Not in 15 yrs", positive: breakEvenYear_ !== null }]
+      ),
+    ];
+
+    return {
+      chartData:       chartData_,
+      annualMort:      annualMort_,
+      loanAmount:      loanAmount_,
+      annualMudTaxYr1: annualMudTaxYr1_,
+      hasMud:          hasMud_,
+      summaryStats:    summaryStats_,
+      breakEvenYear:   breakEvenYear_,
+    };
+  }, [rate, downPct, listPrice, monthlyRent, mudRate]);
+
   // ── Hard stop: no list price ─────────────────────────────────────────────
-  if (!listPrice || !monthlyRent) {
+  if (!computed) {
     return (
-      <div
-        style={{
-          background: "var(--bg-surface)",
-          border: "1px solid var(--border-subtle)",
-          borderRadius: 10,
-          padding: "24px",
-          textAlign: "center",
-        }}
-      >
+      <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-subtle)", borderRadius: 10, padding: "24px", textAlign: "center" }}>
         <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 6 }}>
           Cash flow projection unavailable
         </p>
@@ -187,204 +244,62 @@ export default function CashFlowChart({ listingText, rentcastEstimate, mudRate }
     );
   }
 
-  // ── MUD tax ───────────────────────────────────────────────────────────────
-  // Rate is in $/100 assessed value. We use list price as a proxy for
-  // assessed value. We keep MUD tax flat across all 15 years — MUD rates
-  // often decrease as district debt is paid off, so this is slightly conservative.
-  const hasMud = !!(mudRate && mudRate > 0);
-  const annualMudTaxYr1 = hasMud ? Math.round((mudRate! * listPrice) / 100) : 0;
-
-  // ── Mortgage math ────────────────────────────────────────────────────────
-  // 25% down, 7% fixed, 30-year amortisation
-  const loanAmount   = listPrice * 0.75;
-  const r            = 0.07 / 12;           // monthly rate
-  const n            = 360;                  // 30 yr × 12
-  const monthlyMort  = loanAmount * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
-  const annualMort   = monthlyMort * 12;
-
-  // ── 15-year projections ──────────────────────────────────────────────────
-  const chartData: ChartRow[] = Array.from({ length: 15 }, (_, i) => {
-    const annualGross  = monthlyRent * 12 * Math.pow(1.03, i); // 3% rent growth
-    const egi          = annualGross * 0.95;                    // 5% vacancy
-    const noi          = egi * 0.65;                            // 35% expenses
-    // Annual appreciation gain on current property value (3% compounding)
-    const appreciation = listPrice * Math.pow(1.03, i) * 0.03;
-    // MUD tax is flat (no growth assumed — rates often decline as bonds are paid off)
-    const mudTax       = hasMud ? annualMudTaxYr1 : 0;
-    const cashFlow     = noi - annualMort - mudTax;
-
-    const row: ChartRow = {
-      year: i + 1,
-      "Gross Income": Math.round(annualGross),
-      NOI:            Math.round(noi),
-      "Cash Flow":    Math.round(cashFlow),
-      "Appreciation": Math.round(appreciation),
-    };
-    if (hasMud) row["MUD Tax"] = -mudTax; // negative so it plots below zero axis
-    return row;
-  });
-
-  // ── Summary stats ────────────────────────────────────────────────────────
-  const totalCF           = chartData.reduce((s, d) => s + d["Cash Flow"], 0);
-  const totalAppreciation = chartData.reduce((s, d) => s + d["Appreciation"], 0);
-  const totalReturn       = totalCF + totalAppreciation;
-  const breakEvenYear     = chartData.find((d) => d["Cash Flow"] > 0)?.year ?? null;
-
-  const summaryStats = [
-    {
-      label: "15-Year Cash Flow",
-      value: usd.format(totalCF),
-      positive: totalCF >= 0,
-    },
-    {
-      label: "15-Year Appreciation",
-      value: usd.format(totalAppreciation),
-      positive: true,
-    },
-    {
-      label: "Total Return",
-      value: usd.format(totalReturn),
-      positive: totalReturn >= 0,
-    },
-    ...(hasMud
-      ? [
-          {
-            label: "MUD Tax / Year",
-            value: usd.format(annualMudTaxYr1),
-            positive: false, // always shown in red — it's a cost
-          },
-        ]
-      : [
-          {
-            label: "Break-Even Year",
-            value: breakEvenYear ? `Year ${breakEvenYear}` : "Not in 15 yrs",
-            positive: breakEvenYear !== null,
-          },
-        ]),
-  ];
-
-  // When MUD is active, show break-even in a 5th tile below
+  const { chartData, annualMort, loanAmount, annualMudTaxYr1, hasMud, summaryStats, breakEvenYear } = computed;
   const showBreakEvenSeparately = hasMud;
 
   return (
-    <div
-      style={{
-        background: "var(--bg-surface)",
-        border: "1px solid var(--border-subtle)",
-        borderRadius: 10,
-        padding: "20px 24px",
-      }}
-    >
+    <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-subtle)", borderRadius: 10, padding: "20px 24px" }}>
       {/* ── Header ───────────────────────────────────────────────────── */}
-      <div
-        className="ps-chart-header"
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          gap: 16,
-          marginBottom: 20,
-        }}
-      >
+      <div className="ps-chart-header" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, marginBottom: 14 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
-            <p
-              style={{
-                fontSize: 9,
-                fontWeight: 600,
-                letterSpacing: "0.14em",
-                textTransform: "uppercase",
-                color: "var(--text-muted)",
-                margin: 0,
-              }}
-            >
+            <p style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-muted)", margin: 0 }}>
               15-Year Cash Flow Projection
             </p>
             {rentIsEstimated && (
-              <span
-                style={{
-                  fontSize: 9,
-                  fontWeight: 600,
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
-                  color: "#F5A623",
-                  background: "rgba(245,166,35,0.1)",
-                  border: "1px solid rgba(245,166,35,0.25)",
-                  borderRadius: 4,
-                  padding: "1px 6px",
-                }}
-              >
+              <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "#F5A623", background: "rgba(245,166,35,0.1)", border: "1px solid rgba(245,166,35,0.25)", borderRadius: 4, padding: "1px 6px" }}>
                 Rent estimated
               </span>
             )}
             {rentSource === "rentcast" && (
-              <span
-                style={{
-                  fontSize: 9,
-                  fontWeight: 600,
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
-                  color: "#818CF8",
-                  background: "rgba(129,140,248,0.1)",
-                  border: "1px solid rgba(129,140,248,0.25)",
-                  borderRadius: 4,
-                  padding: "1px 6px",
-                }}
-              >
+              <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "#818CF8", background: "rgba(129,140,248,0.1)", border: "1px solid rgba(129,140,248,0.25)", borderRadius: 4, padding: "1px 6px" }}>
                 Rentcast
               </span>
             )}
             {hasMud && (
-              <span
-                style={{
-                  fontSize: 9,
-                  fontWeight: 600,
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
-                  color: "#F5A623",
-                  background: "rgba(245,166,35,0.08)",
-                  border: "1px solid rgba(245,166,35,0.3)",
-                  borderRadius: 4,
-                  padding: "1px 6px",
-                }}
-              >
+              <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "#F5A623", background: "rgba(245,166,35,0.08)", border: "1px solid rgba(245,166,35,0.3)", borderRadius: 4, padding: "1px 6px" }}>
                 MUD ${mudRate}/100
               </span>
             )}
           </div>
-
-          {/* Rent source line — shows both estimates when both are available */}
           <p style={{ fontSize: 11, color: "var(--text-secondary)" }}>
             {rentSource === "rentcast" ? (
               <>
                 <span style={{ color: "#818CF8" }}>${rentcastEstimate!.toLocaleString()}/mo</span>
                 {" "}(Rentcast estimate)
                 {rentZestimate && (
-                  <span style={{ color: "var(--text-muted)" }}>
-                    {" · "}Zillow Zestimate: ${rentZestimate.toLocaleString()}/mo
-                  </span>
+                  <span style={{ color: "var(--text-muted)" }}>{" · "}Zillow: ${rentZestimate.toLocaleString()}/mo</span>
                 )}
               </>
             ) : rentSource === "zillow" ? (
               <>${rentZestimate!.toLocaleString()}/mo (Zillow Rent Zestimate)</>
             ) : (
-              <>${monthlyRent!.toLocaleString()}/mo (0.75% of list price — no rent data available)</>
+              <>${monthlyRent!.toLocaleString()}/mo (0.75% of list price — no rent data)</>
             )}
-            {" · "}${(listPrice / 1000).toFixed(0)}k purchase · 25% down · 7% / 30yr
+            {" · "}${(listPrice! / 1000).toFixed(0)}k purchase · {downPct}% down · {rate}%/30yr
           </p>
         </div>
 
         {/* Legend chips */}
         <div className="ps-chart-legend" style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", flexShrink: 0, justifyContent: "flex-end", maxWidth: 260 }}>
-          {LINES.map(({ label, color }) => (
-            <div key={label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          {LINES.map(({ key, color }) => (
+            <div key={key} style={{ display: "flex", alignItems: "center", gap: 5 }}>
               <div style={{ width: 16, height: 2, background: color, borderRadius: 1 }} />
-              <span style={{ fontSize: 10, color: "#7A7A9A" }}>{label}</span>
+              <span style={{ fontSize: 10, color: "#7A7A9A" }}>{key}</span>
             </div>
           ))}
           {hasMud && (
             <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-              {/* Dashed line preview for MUD */}
               <svg width="16" height="4" viewBox="0 0 16 4">
                 <line x1="0" y1="2" x2="16" y2="2" stroke="#F5A623" strokeWidth="2" strokeDasharray="4 3" />
               </svg>
@@ -394,12 +309,45 @@ export default function CashFlowChart({ listingText, rentcastEstimate, mudRate }
         </div>
       </div>
 
+      {/* ── Rate / Down controls ─────────────────────────────────────── */}
+      <div
+        className="ps-chart-controls"
+        style={{
+          display: "flex",
+          gap: 12,
+          alignItems: "center",
+          flexWrap: "wrap",
+          marginBottom: 16,
+          padding: "10px 12px",
+          background: "var(--bg-elevated)",
+          borderRadius: 7,
+          border: "1px solid var(--border-subtle)",
+        }}
+      >
+        <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", flexShrink: 0 }}>
+          Rate
+        </span>
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+          {RATE_OPTIONS.map((r) => (
+            <Chip key={r} label={`${r}%`} active={rate === r} onClick={() => setRate(r)} />
+          ))}
+        </div>
+        <div style={{ width: 1, height: 20, background: "var(--border-subtle)", flexShrink: 0 }} />
+        <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", flexShrink: 0 }}>
+          Down
+        </span>
+        <div style={{ display: "flex", gap: 4 }}>
+          {DOWN_OPTIONS.map((d) => (
+            <Chip key={d} label={`${d}%`} active={downPct === d} onClick={() => setDownPct(d)} />
+          ))}
+        </div>
+      </div>
+
       {/* ── Chart ────────────────────────────────────────────────────── */}
       <ResponsiveContainer width="100%" height={260}>
         <LineChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="4 4" stroke="#1E1E2E" vertical={false} />
           <ReferenceLine y={0} stroke="#252535" strokeDasharray="5 3" />
-
           <XAxis
             dataKey="year"
             axisLine={{ stroke: "#1E1E2E" }}
@@ -414,36 +362,12 @@ export default function CashFlowChart({ listingText, rentcastEstimate, mudRate }
             tickFormatter={fmtK}
             width={48}
           />
-
-          <Tooltip
-            content={<CustomTooltip />}
-            cursor={{ stroke: "#252535", strokeWidth: 1 }}
-          />
-
+          <Tooltip content={<CustomTooltip />} cursor={{ stroke: "#252535", strokeWidth: 1 }} />
           {LINES.map(({ key, color }) => (
-            <Line
-              key={key}
-              type="monotone"
-              dataKey={key}
-              stroke={color}
-              strokeWidth={1.75}
-              dot={false}
-              activeDot={{ r: 3.5, strokeWidth: 0, fill: color }}
-            />
+            <Line key={key} type="monotone" dataKey={key} stroke={color} strokeWidth={1.75} dot={false} activeDot={{ r: 3.5, strokeWidth: 0, fill: color }} />
           ))}
-
-          {/* MUD Tax line — dashed amber, shown only when a rate was entered */}
           {hasMud && (
-            <Line
-              key={MUD_LINE.key}
-              type="monotone"
-              dataKey={MUD_LINE.key}
-              stroke={MUD_LINE.color}
-              strokeWidth={1.5}
-              strokeDasharray="5 4"
-              dot={false}
-              activeDot={{ r: 3, strokeWidth: 0, fill: MUD_LINE.color }}
-            />
+            <Line key={MUD_LINE.key} type="monotone" dataKey={MUD_LINE.key} stroke={MUD_LINE.color} strokeWidth={1.5} strokeDasharray="5 4" dot={false} activeDot={{ r: 3, strokeWidth: 0, fill: MUD_LINE.color }} />
           )}
         </LineChart>
       </ResponsiveContainer>
@@ -452,7 +376,7 @@ export default function CashFlowChart({ listingText, rentcastEstimate, mudRate }
       <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 8, marginBottom: 20 }}>
         3% annual rent growth · 3% annual appreciation · 5% vacancy · 35% expense ratio ·{" "}
         <span className="font-mono">${Math.round(annualMort / 12).toLocaleString()}/mo</span>{" "}
-        mortgage ({usd.format(loanAmount)} loan)
+        mortgage ({usd.format(loanAmount)} loan · {downPct}% down · {rate}%/30yr)
         {hasMud && (
           <>
             {" · "}
@@ -478,75 +402,24 @@ export default function CashFlowChart({ listingText, rentcastEstimate, mudRate }
         }}
       >
         {summaryStats.map(({ label, value, positive }) => (
-          <div
-            key={label}
-            style={{
-              background: "var(--bg-elevated)",
-              padding: "14px 16px",
-              textAlign: "center",
-            }}
-          >
-            <p
-              className="font-mono"
-              style={{
-                fontSize: 15,
-                fontWeight: 600,
-                letterSpacing: "-0.02em",
-                color: positive ? "var(--text-primary)" : "#E8384F",
-                marginBottom: 5,
-              }}
-            >
+          <div key={label} style={{ background: "var(--bg-elevated)", padding: "14px 16px", textAlign: "center" }}>
+            <p className="font-mono" style={{ fontSize: 15, fontWeight: 600, letterSpacing: "-0.02em", color: positive ? "var(--text-primary)" : "#E8384F", marginBottom: 5 }}>
               {value}
             </p>
-            <p
-              style={{
-                fontSize: 9,
-                fontWeight: 600,
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-                color: "var(--text-muted)",
-              }}
-            >
+            <p style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)" }}>
               {label}
             </p>
           </div>
         ))}
       </div>
 
-      {/* Break-even row — rendered beneath the 4-stat grid when MUD is active */}
+      {/* Break-even row — beneath the grid when MUD is active */}
       {showBreakEvenSeparately && (
-        <div
-          style={{
-            background: "var(--bg-elevated)",
-            border: "1px solid var(--border-subtle)",
-            borderTop: "none",
-            borderRadius: "0 0 8px 8px",
-            padding: "12px 16px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <p
-            style={{
-              fontSize: 9,
-              fontWeight: 600,
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-              color: "var(--text-muted)",
-            }}
-          >
+        <div style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", borderTop: "none", borderRadius: "0 0 8px 8px", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <p style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)" }}>
             Break-Even Year (incl. MUD)
           </p>
-          <p
-            className="font-mono"
-            style={{
-              fontSize: 13,
-              fontWeight: 600,
-              letterSpacing: "-0.02em",
-              color: breakEvenYear ? "var(--text-primary)" : "#E8384F",
-            }}
-          >
+          <p className="font-mono" style={{ fontSize: 13, fontWeight: 600, letterSpacing: "-0.02em", color: breakEvenYear ? "var(--text-primary)" : "#E8384F" }}>
             {breakEvenYear ? `Year ${breakEvenYear}` : "Not in 15 yrs"}
           </p>
         </div>

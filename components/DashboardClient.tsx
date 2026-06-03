@@ -1,0 +1,455 @@
+"use client";
+
+import { useState, useMemo, useCallback, useEffect } from "react";
+import Link from "next/link";
+import PropertyCard from "./PropertyCard";
+import ConfirmModal from "./ConfirmModal";
+import { createClient } from "@/lib/supabase/client";
+import { Property } from "@/lib/types";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type SortKey   = "score-desc" | "score-asc" | "date-desc" | "date-asc" | "address-asc";
+type FilterBand = "all" | "strong" | "conditional" | "pass";
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function readUrlParam(key: string, fallback: string): string {
+  if (typeof window === "undefined") return fallback;
+  return new URLSearchParams(window.location.search).get(key) ?? fallback;
+}
+
+function sortList(list: Property[], key: SortKey): Property[] {
+  return [...list].sort((a, b) => {
+    switch (key) {
+      case "score-desc": return b.overall_score - a.overall_score;
+      case "score-asc":  return a.overall_score - b.overall_score;
+      case "date-desc":  return +new Date(b.created_at) - +new Date(a.created_at);
+      case "date-asc":   return +new Date(a.created_at) - +new Date(b.created_at);
+      case "address-asc": return a.address.localeCompare(b.address);
+    }
+  });
+}
+
+function applyFilter(list: Property[], band: FilterBand, q: string): Property[] {
+  return list.filter((p) => {
+    const inBand =
+      band === "all"         ? true :
+      band === "strong"      ? p.overall_score >= 70 :
+      band === "conditional" ? p.overall_score >= 50 && p.overall_score < 70 :
+      /* pass */               p.overall_score < 50;
+
+    const inSearch = !q.trim() || p.address.toLowerCase().includes(q.toLowerCase());
+    return inBand && inSearch;
+  });
+}
+
+function exportCSV(properties: Property[]) {
+  const headers = [
+    "Address", "Overall Score",
+    "Location Score", "Price Score", "Rental Score", "Condition Score", "Market Score",
+    "Verdict", "Date Analyzed",
+  ];
+
+  const rows = properties.map((p) => {
+    const byCategory: Record<string, number> = {};
+    p.subscores.forEach((s) => { byCategory[s.category] = s.score; });
+    return [
+      p.address,
+      p.overall_score,
+      byCategory["Location & Neighborhood"] ?? "",
+      byCategory["Price & Value"]           ?? "",
+      byCategory["Rental Income Potential"] ?? "",
+      byCategory["Condition & Maintenance"] ?? "",
+      byCategory["Market Trends"]           ?? "",
+      p.verdict,
+      new Date(p.created_at).toLocaleDateString(),
+    ];
+  });
+
+  const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const csv = [headers, ...rows].map((r) => r.map(esc).join(",")).join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
+  a.download = `propscore-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export default function DashboardClient({ initialList }: { initialList: Property[] }) {
+  const [list, setList]               = useState<Property[]>(initialList);
+  const [deleteTargetId, setDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting]       = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [toast, setToast]             = useState<{ msg: string; ok: boolean } | null>(null);
+
+  // Initialise sort/filter from URL on first client render
+  const [sortKey,    setSortKey]    = useState<SortKey>(   () => readUrlParam("sort", "score-desc") as SortKey);
+  const [filterBand, setFilterBand] = useState<FilterBand>(() => readUrlParam("band", "all")        as FilterBand);
+  const [search,     setSearch]     = useState(             () => readUrlParam("q",    ""));
+
+  // Sync state → URL (no server round-trip)
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    sortKey    !== "score-desc" ? url.searchParams.set("sort", sortKey)    : url.searchParams.delete("sort");
+    filterBand !== "all"        ? url.searchParams.set("band", filterBand) : url.searchParams.delete("band");
+    search.trim()               ? url.searchParams.set("q",    search)     : url.searchParams.delete("q");
+    window.history.replaceState({}, "", url.toString());
+  }, [sortKey, filterBand, search]);
+
+  const visible = useMemo(
+    () => sortList(applyFilter(list, filterBand, search), sortKey),
+    [list, sortKey, filterBand, search]
+  );
+
+  // Portfolio stats (always full list)
+  const count    = list.length;
+  const avgScore = count ? Math.round(list.reduce((s, p) => s + p.overall_score, 0) / count) : null;
+  const best     = count ? Math.max(...list.map((p) => p.overall_score)) : null;
+
+  const showToast = useCallback((msg: string, ok = true) => {
+    setToast({ msg, ok });
+    setTimeout(() => setToast(null), 2500);
+  }, []);
+
+  // ── Delete ─────────────────────────────────────────────────────────────────
+
+  async function confirmDelete() {
+    if (!deleteTargetId) return;
+    setDeleting(true);
+    const supabase = createClient();
+    const { error } = await supabase.from("properties").delete().eq("id", deleteTargetId);
+    if (error) {
+      showToast("Failed to delete — try again", false);
+    } else {
+      setList((prev) => prev.filter((p) => p.id !== deleteTargetId));
+      setSelectedIds((prev) => { const next = new Set(prev); next.delete(deleteTargetId); return next; });
+      showToast("Property deleted");
+    }
+    setDeleting(false);
+    setDeleteId(null);
+  }
+
+  // ── Compare selection ──────────────────────────────────────────────────────
+
+  function toggleCompare(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else if (next.size >= 3) {
+        showToast("Select up to 3 properties", false);
+        return prev;
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
+  const compareIds  = [...selectedIds];
+  const canCompare  = compareIds.length >= 2;
+  const deleteTarget = list.find((p) => p.id === deleteTargetId);
+
+  return (
+    <>
+      <main className="ps-page-main" style={{ flex: 1, minWidth: 0 }}>
+
+        {/* ── Header ──────────────────────────────────────────────── */}
+        <div
+          className="ps-dashboard-header"
+          style={{ padding: "28px 36px 24px", borderBottom: "1px solid var(--border-subtle)" }}
+        >
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
+            <div>
+              <h1 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)", letterSpacing: "-0.015em", marginBottom: 4 }}>
+                Portfolio
+              </h1>
+              <p style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                Analyzed properties, ranked by investment score
+              </p>
+            </div>
+
+            <div style={{ display: "flex", gap: 8, flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              {count > 0 && (
+                <button
+                  onClick={() => exportCSV(visible)}
+                  className="ps-btn-ghost"
+                  style={{
+                    display: "flex", alignItems: "center", gap: 6,
+                    fontSize: 12, fontWeight: 600, padding: "8px 14px",
+                    borderRadius: 7, cursor: "pointer",
+                  }}
+                >
+                  <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Export CSV
+                </button>
+              )}
+              <Link
+                href="/analyze"
+                className="ps-btn-accent"
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  color: "#fff", fontSize: 12, fontWeight: 600,
+                  padding: "8px 14px", borderRadius: 7, textDecoration: "none",
+                }}
+              >
+                <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 5v14m7-7H5" />
+                </svg>
+                New analysis
+              </Link>
+            </div>
+          </div>
+
+          {/* Stats */}
+          {count > 0 && (
+            <div className="ps-stats-row" style={{ display: "flex", gap: 32, marginTop: 24 }}>
+              {[
+                { label: "Analyzed",   value: count },
+                { label: "Avg score",  value: avgScore },
+                { label: "Best score", value: best },
+              ].map(({ label, value }) => (
+                <div key={label}>
+                  <p className="font-mono" style={{ fontSize: 24, fontWeight: 600, color: "var(--text-primary)", letterSpacing: "-0.02em", lineHeight: 1, marginBottom: 5 }}>
+                    {value ?? "—"}
+                  </p>
+                  <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)" }}>
+                    {label}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ── Sort / Filter bar ────────────────────────────────────── */}
+        {count > 0 && (
+          <div
+            className="ps-filter-bar"
+            style={{
+              padding: "10px 36px",
+              borderBottom: "1px solid var(--border-subtle)",
+              display: "flex",
+              gap: 8,
+              flexWrap: "wrap",
+              alignItems: "center",
+            }}
+          >
+            {/* Search */}
+            <div style={{ position: "relative", flex: "1 1 140px", maxWidth: 220, minWidth: 0 }}>
+              <svg width="12" height="12" fill="none" stroke="var(--text-muted)" viewBox="0 0 24 24"
+                style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
+                <circle cx={11} cy={11} r={8} strokeWidth={2}/>
+                <path d="M21 21l-4.35-4.35" strokeWidth={2} strokeLinecap="round"/>
+              </svg>
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search address…"
+                style={{
+                  width: "100%", height: 30, paddingLeft: 28, paddingRight: 10,
+                  background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)",
+                  borderRadius: 6, fontSize: 12, color: "var(--text-primary)",
+                  outline: "none", fontFamily: "inherit",
+                }}
+              />
+            </div>
+
+            {/* Band filter */}
+            <div style={{ display: "flex", gap: 4 }}>
+              {(["all", "strong", "conditional", "pass"] as FilterBand[]).map((band) => (
+                <button
+                  key={band}
+                  onClick={() => setFilterBand(band)}
+                  style={{
+                    height: 30, padding: "0 10px", borderRadius: 5, fontSize: 11, fontWeight: 600,
+                    cursor: "pointer", letterSpacing: "0.04em",
+                    border: `1px solid ${filterBand === band ? "var(--accent)" : "var(--border-subtle)"}`,
+                    background: filterBand === band ? "rgba(91,91,214,0.12)" : "transparent",
+                    color: filterBand === band ? "var(--accent)" : "var(--text-muted)",
+                    fontFamily: "inherit",
+                    transition: "all 0.12s ease",
+                  }}
+                >
+                  {band === "all" ? "All" : band === "strong" ? "70+" : band === "conditional" ? "50–69" : "<50"}
+                </button>
+              ))}
+            </div>
+
+            {/* Sort */}
+            <select
+              value={sortKey}
+              onChange={(e) => setSortKey(e.target.value as SortKey)}
+              style={{
+                height: 30, padding: "0 8px", borderRadius: 6, fontSize: 12,
+                background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)",
+                color: "var(--text-secondary)", fontFamily: "inherit", cursor: "pointer", outline: "none",
+              }}
+            >
+              <option value="score-desc">Score: High → Low</option>
+              <option value="score-asc">Score: Low → High</option>
+              <option value="date-desc">Date: Newest first</option>
+              <option value="date-asc">Date: Oldest first</option>
+              <option value="address-asc">Address: A → Z</option>
+            </select>
+
+            {/* Result count when filtered */}
+            {(search.trim() || filterBand !== "all") && (
+              <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: "auto" }}>
+                {visible.length} of {count}
+                {visible.length < count && (
+                  <button
+                    onClick={() => { setSearch(""); setFilterBand("all"); }}
+                    style={{ marginLeft: 8, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}
+                  >
+                    Clear
+                  </button>
+                )}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* ── Property list ─────────────────────────────────────────── */}
+        <div className="ps-dashboard-content" style={{ padding: "24px 36px" }}>
+          {!count ? (
+            /* Empty state */
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "80px 0", textAlign: "center" }}>
+              <div style={{ width: 48, height: 48, borderRadius: 10, background: "var(--bg-surface)", border: "1px solid var(--border-subtle)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
+                <svg width="22" height="22" fill="none" stroke="var(--text-muted)" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </div>
+              <h3 style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", letterSpacing: "-0.01em", marginBottom: 8 }}>
+                No properties yet
+              </h3>
+              <p style={{ fontSize: 12, color: "var(--text-muted)", maxWidth: 280, lineHeight: 1.6, marginBottom: 20 }}>
+                Paste a Zillow URL to get a data-backed investment score — cap rate, rent yield, school ratings and more.
+              </p>
+              <Link href="/analyze" className="ps-btn-accent" style={{ color: "#fff", fontSize: 12, fontWeight: 600, padding: "9px 18px", borderRadius: 7, textDecoration: "none" }}>
+                Analyze your first property
+              </Link>
+            </div>
+          ) : visible.length === 0 ? (
+            /* No filter matches */
+            <div style={{ textAlign: "center", padding: "60px 0" }}>
+              <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 12 }}>
+                No properties match your filters.
+              </p>
+              <button
+                onClick={() => { setSearch(""); setFilterBand("all"); }}
+                style={{ fontSize: 12, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}
+              >
+                Clear filters
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {visible.map((property) => (
+                <PropertyCard
+                  key={property.id}
+                  property={property}
+                  onDelete={(id) => setDeleteId(id)}
+                  onCompareToggle={toggleCompare}
+                  isCompareSelected={selectedIds.has(property.id)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* ── Compare sticky bar ────────────────────────────────────── */}
+      {selectedIds.size > 0 && (
+        <div
+          className="ps-compare-bar"
+          style={{
+            background: "rgba(17,17,24,0.96)",
+            backdropFilter: "blur(12px)",
+            borderTop: "1px solid var(--border-subtle)",
+            padding: "12px 28px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 16,
+          }}
+        >
+          <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+            <span className="font-mono" style={{ color: "var(--text-primary)", fontWeight: 700 }}>
+              {selectedIds.size}
+            </span>
+            {" "}propert{selectedIds.size === 1 ? "y" : "ies"} selected
+            {!canCompare && (
+              <span style={{ color: "var(--text-muted)" }}>
+                {" — "}select {2 - selectedIds.size} more to compare
+              </span>
+            )}
+          </span>
+
+          <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              style={{
+                padding: "7px 14px", borderRadius: 7, fontSize: 12, fontWeight: 600,
+                cursor: "pointer", border: "1px solid var(--border-subtle)",
+                background: "transparent", color: "var(--text-secondary)", fontFamily: "inherit",
+              }}
+            >
+              Clear
+            </button>
+            <Link
+              href={canCompare ? `/compare?ids=${compareIds.join(",")}` : "#"}
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "7px 16px", borderRadius: 7, fontSize: 12, fontWeight: 600,
+                textDecoration: "none",
+                background: canCompare ? "var(--accent)" : "var(--bg-elevated)",
+                color: canCompare ? "#fff" : "var(--text-muted)",
+                pointerEvents: canCompare ? "auto" : "none",
+                transition: "background 0.15s ease",
+              }}
+            >
+              <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+              </svg>
+              Compare ({selectedIds.size})
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete confirm modal ─────────────────────────────────── */}
+      <ConfirmModal
+        open={!!deleteTargetId}
+        title="Delete property?"
+        message={`This will permanently remove "${deleteTarget?.address ?? "this property"}" from your portfolio. This cannot be undone.`}
+        confirmLabel="Delete"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteId(null)}
+        loading={deleting}
+        danger
+      />
+
+      {/* ── Toast ────────────────────────────────────────────────── */}
+      {toast && (
+        <div
+          className="ps-toast"
+          style={{ color: toast.ok ? "var(--score-green)" : "var(--score-red)" }}
+        >
+          {toast.msg}
+        </div>
+      )}
+    </>
+  );
+}

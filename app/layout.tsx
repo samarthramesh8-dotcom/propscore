@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, DM_Mono } from "next/font/google";
 import "./globals.css";
+import CmdK from "@/components/CmdK";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -23,7 +24,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} ${dmMono.variable}`}>
-      <body>{children}</body>
+      <body>
+        {children}
+        <CmdK />
+      </body>
     </html>
   );
 }

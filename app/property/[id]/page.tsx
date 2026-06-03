@@ -7,6 +7,8 @@ import ScoreRing from "@/components/ScoreRing";
 import SubscoreCard from "@/components/SubscoreCard";
 import CashFlowChart from "@/components/CashFlowChart";
 import Sidebar from "@/components/Sidebar";
+import PropertyActions from "@/components/PropertyActions";
+import NotesField from "@/components/NotesField";
 import { Property } from "@/lib/types";
 
 export default async function PropertyPage({
@@ -32,7 +34,14 @@ export default async function PropertyPage({
   if (!data) notFound();
 
   const property = data as Property;
-  const date = new Date(property.created_at).toLocaleDateString("en-US", {
+
+  // Use updated_at if available, fall back to created_at for display + staleness
+  const refDate  = property.updated_at ?? property.created_at;
+  const daysSince = Math.floor((Date.now() - new Date(refDate).getTime()) / 86_400_000);
+  const isStale   = daysSince > 30;
+
+  const dateLabel = property.updated_at ? "Updated" : "Analyzed";
+  const displayDate = new Date(refDate).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -49,9 +58,10 @@ export default async function PropertyPage({
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 12,
+            gap: 10,
             padding: "16px 28px",
             borderBottom: "1px solid var(--border-subtle)",
+            flexWrap: "wrap",
           }}
         >
           <Link
@@ -74,7 +84,7 @@ export default async function PropertyPage({
             </svg>
           </Link>
 
-          <div style={{ minWidth: 0 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <h1
               style={{
                 fontSize: 13,
@@ -90,16 +100,25 @@ export default async function PropertyPage({
             </h1>
           </div>
 
+          {/* Client-side action buttons + staleness badge */}
+          <PropertyActions
+            propertyId={property.id}
+            listingText={property.listing_text}
+            mudRate={property.mud_rate}
+            isStale={isStale}
+            staleDays={daysSince}
+          />
+
           <span
             className="font-mono"
             style={{
-              marginLeft: "auto",
               fontSize: 11,
               color: "var(--text-muted)",
               flexShrink: 0,
+              whiteSpace: "nowrap",
             }}
           >
-            {date}
+            {dateLabel} {displayDate}
           </span>
         </div>
 
@@ -269,84 +288,84 @@ export default async function PropertyPage({
                 }}
               >
                 <div style={{ minWidth: 460 }}>
-                {/* Table header */}
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 88px 88px 72px 56px",
-                    padding: "10px 18px",
-                    borderBottom: "1px solid var(--border-subtle)",
-                  }}
-                >
-                  {["Address", "Rent / mo", "Bed / Ba", "Sqft", "Dist"].map((h) => (
-                    <span
-                      key={h}
-                      style={{
-                        fontSize: 9,
-                        fontWeight: 600,
-                        letterSpacing: "0.12em",
-                        textTransform: "uppercase",
-                        color: "var(--text-muted)",
-                      }}
-                    >
-                      {h}
-                    </span>
-                  ))}
-                </div>
-                {/* Rows */}
-                {property.rentcast_comps.map((comp, i) => (
+                  {/* Table header */}
                   <div
-                    key={i}
                     style={{
                       display: "grid",
                       gridTemplateColumns: "1fr 88px 88px 72px 56px",
-                      padding: "12px 18px",
-                      borderBottom:
-                        i < property.rentcast_comps!.length - 1
-                          ? "1px solid var(--border-subtle)"
-                          : "none",
-                      alignItems: "center",
+                      padding: "10px 18px",
+                      borderBottom: "1px solid var(--border-subtle)",
                     }}
                   >
-                    <span
+                    {["Address", "Rent / mo", "Bed / Ba", "Sqft", "Dist"].map((h) => (
+                      <span
+                        key={h}
+                        style={{
+                          fontSize: 9,
+                          fontWeight: 600,
+                          letterSpacing: "0.12em",
+                          textTransform: "uppercase",
+                          color: "var(--text-muted)",
+                        }}
+                      >
+                        {h}
+                      </span>
+                    ))}
+                  </div>
+                  {/* Rows */}
+                  {property.rentcast_comps.map((comp, i) => (
+                    <div
+                      key={i}
                       style={{
-                        fontSize: 11,
-                        color: "var(--text-secondary)",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                        paddingRight: 12,
+                        display: "grid",
+                        gridTemplateColumns: "1fr 88px 88px 72px 56px",
+                        padding: "12px 18px",
+                        borderBottom:
+                          i < property.rentcast_comps!.length - 1
+                            ? "1px solid var(--border-subtle)"
+                            : "none",
+                        alignItems: "center",
                       }}
                     >
-                      {comp.address}
-                    </span>
-                    <span
-                      className="font-mono"
-                      style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}
-                    >
-                      ${comp.rent.toLocaleString()}
-                    </span>
-                    <span
-                      className="font-mono"
-                      style={{ fontSize: 11, color: "var(--text-secondary)" }}
-                    >
-                      {comp.bedrooms}bd / {comp.bathrooms}ba
-                    </span>
-                    <span
-                      className="font-mono"
-                      style={{ fontSize: 11, color: "var(--text-secondary)" }}
-                    >
-                      {comp.squareFootage ? comp.squareFootage.toLocaleString() : "—"}
-                    </span>
-                    <span
-                      className="font-mono"
-                      style={{ fontSize: 11, color: "var(--text-muted)" }}
-                    >
-                      {comp.distanceMi}mi
-                    </span>
-                  </div>
-                ))}
-                </div>{/* /minWidth wrapper */}
+                      <span
+                        style={{
+                          fontSize: 11,
+                          color: "var(--text-secondary)",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          paddingRight: 12,
+                        }}
+                      >
+                        {comp.address}
+                      </span>
+                      <span
+                        className="font-mono"
+                        style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}
+                      >
+                        ${comp.rent.toLocaleString()}
+                      </span>
+                      <span
+                        className="font-mono"
+                        style={{ fontSize: 11, color: "var(--text-secondary)" }}
+                      >
+                        {comp.bedrooms}bd / {comp.bathrooms}ba
+                      </span>
+                      <span
+                        className="font-mono"
+                        style={{ fontSize: 11, color: "var(--text-secondary)" }}
+                      >
+                        {comp.squareFootage ? comp.squareFootage.toLocaleString() : "—"}
+                      </span>
+                      <span
+                        className="font-mono"
+                        style={{ fontSize: 11, color: "var(--text-muted)" }}
+                      >
+                        {comp.distanceMi}mi
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}
@@ -482,6 +501,9 @@ export default async function PropertyPage({
               </pre>
             </div>
           </div>
+
+          {/* ── Notes ─────────────────────────────────────── */}
+          <NotesField propertyId={property.id} initialNotes={property.notes} />
         </div>
       </main>
     </div>

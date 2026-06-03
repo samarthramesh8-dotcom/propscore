@@ -470,6 +470,10 @@ export async function POST(request: NextRequest) {
     const rawInput: string = body.listing_text;
     const mudRate: number | null =
       typeof body.mud_rate === "number" && body.mud_rate > 0 ? body.mud_rate : null;
+    const reanalyzeId: string | null =
+      typeof body.reanalyze_id === "string" && body.reanalyze_id.trim().length > 0
+        ? body.reanalyze_id.trim()
+        : null;
 
     if (!rawInput?.trim()) {
       return NextResponse.json({ error: "listing_text is required" }, { status: 400 });
@@ -501,44 +505,80 @@ export async function POST(request: NextRequest) {
 
     const analysis = parseClaudeJson(content.text);
 
-    // Base columns every analysis needs
-    const baseInsert = {
-      user_id:       user.id,
-      address:       analysis.address,
-      listing_text:  listingText,
-      overall_score: analysis.overall_score,
-      subscores:     analysis.subscores,
-      verdict:       analysis.verdict,
-      bull_case:     analysis.bull_case,
-      bear_case:     analysis.bear_case,
+    // Columns shared by both insert and update paths
+    const analysisPayload = {
+      address:           analysis.address,
+      listing_text:      listingText,
+      overall_score:     analysis.overall_score,
+      subscores:         analysis.subscores,
+      verdict:           analysis.verdict,
+      bull_case:         analysis.bull_case,
+      bear_case:         analysis.bear_case,
+      rentcast_estimate: rentcast?.estimate ?? null,
+      rentcast_comps:    rentcast?.comparables ?? null,
+      mud_rate:          mudRate,
     };
 
-    // Attempt full insert with all columns (requires migration to have been run)
-    let { data, error } = await supabase
-      .from("properties")
-      .insert({
-        ...baseInsert,
-        rentcast_estimate: rentcast?.estimate ?? null,
-        rentcast_comps:    rentcast?.comparables ?? null,
-        mud_rate:          mudRate,
-      })
-      .select("id")
-      .single();
+    let data: { id: string } | null = null;
+    let error: { code?: string; message?: string } | null = null;
 
-    // PostgreSQL error code 42703 = "undefined_column" — migration not yet run.
-    // Fall back to base columns so the analysis still saves successfully.
-    if (error?.code === "42703") {
-      console.warn(
-        "/api/analyze: new columns missing — run the DB migration. " +
-        "Falling back to base insert without rentcast/mud fields."
-      );
-      const fallback = await supabase
+    if (reanalyzeId) {
+      // ── Re-analyze: update the existing row in-place ─────────────────────
+      // The updated_at trigger fires automatically on every UPDATE.
+      const up = await supabase
+        .from("properties")
+        .update(analysisPayload)
+        .eq("id", reanalyzeId)
+        .eq("user_id", user.id)   // ensures ownership
+        .select("id")
+        .single();
+      data  = up.data;
+      error = up.error;
+
+      if (error?.code === "42703") {
+        const { address, listing_text, overall_score, subscores, verdict, bull_case, bear_case } = analysisPayload;
+        const fallback = await supabase
+          .from("properties")
+          .update({ address, listing_text, overall_score, subscores, verdict, bull_case, bear_case })
+          .eq("id", reanalyzeId)
+          .eq("user_id", user.id)
+          .select("id")
+          .single();
+        data  = fallback.data;
+        error = fallback.error;
+      }
+
+      if (!error && !data) {
+        // Row not found or user doesn't own it
+        throw new Error("Property not found or access denied");
+      }
+    } else {
+      // ── New analysis: insert a fresh row ──────────────────────────────────
+      const baseInsert = { user_id: user.id, ...analysisPayload };
+
+      const ins = await supabase
         .from("properties")
         .insert(baseInsert)
         .select("id")
         .single();
-      data  = fallback.data;
-      error = fallback.error;
+      data  = ins.data;
+      error = ins.error;
+
+      // PostgreSQL error code 42703 = "undefined_column" — migration not yet run.
+      if (error?.code === "42703") {
+        console.warn(
+          "/api/analyze: new columns missing — run the DB migration. " +
+          "Falling back to base insert without rentcast/mud fields."
+        );
+        const { address, listing_text, overall_score, subscores, verdict, bull_case, bear_case } = analysisPayload;
+        const fallback = await supabase
+          .from("properties")
+          .insert({ user_id: user.id, address, listing_text, overall_score, subscores, verdict, bull_case, bear_case })
+          .select("id")
+          .single();
+        data  = fallback.data;
+        error = fallback.error;
+      }
     }
 
     if (error) {

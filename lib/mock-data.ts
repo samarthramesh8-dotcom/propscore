@@ -67,7 +67,9 @@ Description: Beautifully maintained 3/2 in Northwest Austin's coveted tech corri
       { address: "4933 Westover Hills Blvd, Austin, TX", rent: 2995, bedrooms: 3, bathrooms: 2.5, squareFootage: 1998, distanceMi: 1.1 },
     ],
     mud_rate: null,
+    notes: null,
     created_at: "2026-05-28T14:22:00Z",
+    updated_at: null,
   },
 
   // ── 2. Houston, TX — MUD district, cash-flow positive but risky ───────────
@@ -131,7 +133,9 @@ Description: Spacious 4/2.5 in Energy Corridor. 3-car garage, updated kitchen 20
       { address: "12820 Briar Forest Dr, Houston, TX",   rent: 2175, bedrooms: 4, bathrooms: 2.5, squareFootage: 2180, distanceMi: 1.4 },
     ],
     mud_rate: 1.12,
+    notes: null,
     created_at: "2026-05-22T09:15:00Z",
+    updated_at: null,
   },
 
   // ── 3. Dallas, TX — luxury overpriced, strong pass ────────────────────────
@@ -194,6 +198,8 @@ Description: Stunning 4/3 in top-rated Plano ISD. Built 2018, smart home, quartz
       { address: "1102 Hillcrest Rd, Dallas, TX",  rent: 3250, bedrooms: 4, bathrooms: 3,   squareFootage: 2720, distanceMi: 1.0 },
     ],
     mud_rate: null,
+    notes: null,
     created_at: "2026-05-15T16:45:00Z",
+    updated_at: null,
   },
 ];
