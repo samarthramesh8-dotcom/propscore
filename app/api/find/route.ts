@@ -171,9 +171,15 @@ async function fetchViaZillapi(zillowUrl: string): Promise<AnalysisInput> {
     },
   );
 
-  const json = await res.json();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const json: any = await res.json();
   if (!res.ok || json.error) {
-    throw new Error(json.detail || json.error || `Zillapi error ${res.status}`);
+    const errMsg =
+      typeof json.detail  === "string" ? json.detail  :
+      typeof json.error   === "string" ? json.error   :
+      typeof json.message === "string" ? json.message :
+      json.error ? JSON.stringify(json.error) : `Zillapi error ${res.status}`;
+    throw new Error(errMsg);
   }
 
   const d = json?.data ?? json;
@@ -292,11 +298,16 @@ export async function POST(request: NextRequest) {
       },
     );
 
-    const searchJson = await searchRes.json();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const searchJson: any = await searchRes.json().catch(() => null);
+    console.log("/api/find Zillapi search status:", searchRes.status, JSON.stringify(searchJson));
     if (!searchRes.ok) {
-      throw new Error(
-        searchJson.detail || searchJson.error || `Zillapi search error ${searchRes.status}`,
-      );
+      const errMsg =
+        typeof searchJson?.detail  === "string" ? searchJson.detail  :
+        typeof searchJson?.error   === "string" ? searchJson.error   :
+        typeof searchJson?.message === "string" ? searchJson.message :
+        searchJson ? JSON.stringify(searchJson) : `Zillapi search error ${searchRes.status}`;
+      throw new Error(`Zillapi search error ${searchRes.status}: ${errMsg}`);
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
