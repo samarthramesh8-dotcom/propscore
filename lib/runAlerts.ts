@@ -21,15 +21,21 @@ function parseMetric(text: string, re: RegExp): string | null {
   return m ? m[1].replace(/,/g, "") : null;
 }
 
-export async function runAlerts(): Promise<{ processed: number }> {
+export async function runAlerts(searchId?: string): Promise<{ processed: number }> {
   const supabase = createAdminClient();
 
-  const cutoff = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString();
-  const { data: searches, error } = await supabase
-    .from("saved_searches")
-    .select("*")
-    .eq("is_active", true)
-    .or(`last_run_at.is.null,last_run_at.lt.${cutoff}`);
+  let query = supabase.from("saved_searches").select("*").eq("is_active", true);
+
+  if (searchId) {
+    // Manual run: target a single search, skip the recency filter
+    query = query.eq("id", searchId);
+  } else {
+    // Cron run: skip searches run within the last 6 days
+    const cutoff = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString();
+    query = query.or(`last_run_at.is.null,last_run_at.lt.${cutoff}`);
+  }
+
+  const { data: searches, error } = await query;
 
   if (error || !searches?.length) return { processed: 0 };
 

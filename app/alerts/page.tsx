@@ -73,6 +73,31 @@ export default function AlertsPage() {
   const [deleteId,  setDeleteId]  = useState<string | null>(null);
   const [deleting,  setDeleting]  = useState(false);
 
+  // Run now state
+  const [runningId, setRunningId] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+
+  function showToast(msg: string, ok = true) {
+    setToast({ msg, ok });
+    setTimeout(() => setToast(null), 2500);
+  }
+
+  async function handleRunNow(id: string) {
+    setRunningId(id);
+    try {
+      const res = await fetch(`/api/saved-searches/${id}/run`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error ?? "Run failed", false); return; }
+      showToast(data.new_results > 0 ? `${data.new_results} new deal${data.new_results === 1 ? "" : "s"} found — check your email!` : "No new deals found matching your criteria.");
+      // Refresh list to update last_run_at
+      await loadSearches();
+    } catch {
+      showToast("Network error — please try again.", false);
+    } finally {
+      setRunningId(null);
+    }
+  }
+
   useEffect(() => {
     loadSearches();
   }, []);
@@ -443,6 +468,53 @@ export default function AlertsPage() {
 
                 {/* Actions */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                  {/* Run now */}
+                  <button
+                    onClick={() => handleRunNow(s.id)}
+                    disabled={runningId === s.id}
+                    title="Run now"
+                    style={{
+                      height: 30,
+                      padding: "0 12px",
+                      background: "transparent",
+                      border: "1px solid var(--border-subtle)",
+                      borderRadius: 6,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: "var(--text-secondary)",
+                      cursor: runningId === s.id ? "not-allowed" : "pointer",
+                      fontFamily: "inherit",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 5,
+                      opacity: runningId !== null && runningId !== s.id ? 0.5 : 1,
+                      transition: "border-color 0.12s, color 0.12s",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (runningId !== s.id) {
+                        (e.currentTarget as HTMLElement).style.borderColor = "var(--accent)";
+                        (e.currentTarget as HTMLElement).style.color = "var(--accent)";
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.borderColor = "var(--border-subtle)";
+                      (e.currentTarget as HTMLElement).style.color = "var(--text-secondary)";
+                    }}
+                  >
+                    {runningId === s.id ? (
+                      <svg width="11" height="11" fill="none" viewBox="0 0 24 24" style={{ animation: "spin 0.8s linear infinite" }}>
+                        <circle cx={12} cy={12} r={10} stroke="currentColor" strokeWidth={4} opacity={0.25} />
+                        <path fill="currentColor" opacity={0.75} d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                    ) : (
+                      <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                    )}
+                    {runningId === s.id ? "Running…" : "Run now"}
+                  </button>
+
                   {/* Pause / Resume toggle */}
                   <button
                     onClick={() => handleToggle(s.id, !s.is_active)}
@@ -531,6 +603,13 @@ export default function AlertsPage() {
         loading={deleting}
         danger
       />
+
+      {/* ── Toast ────────────────────────────────────────────────────────── */}
+      {toast && (
+        <div className="ps-toast" style={{ color: toast.ok ? "var(--score-green)" : "var(--score-red)" }}>
+          {toast.msg}
+        </div>
+      )}
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>

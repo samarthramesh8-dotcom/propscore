@@ -87,6 +87,54 @@ export default function FindPage() {
   // Compare selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
+  // Save as alert modal
+  const [saveModalOpen, setSaveModalOpen] = useState(false);
+  const [saveName,      setSaveName]      = useState("");
+  const [saveMinScore,  setSaveMinScore]  = useState("60");
+  const [saving,        setSaving]        = useState(false);
+  const [saveError,     setSaveError]     = useState<string | null>(null);
+  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+
+  function openSaveModal() {
+    setSaveName(location.trim() ? `${location.trim()} deals` : "My search");
+    setSaveMinScore("60");
+    setSaveError(null);
+    setSaveModalOpen(true);
+  }
+
+  function showToast(msg: string, ok = true) {
+    setToast({ msg, ok });
+    setTimeout(() => setToast(null), 2500);
+  }
+
+  async function handleSaveAlert() {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const res = await fetch("/api/saved-searches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name:      saveName.trim() || `${location.trim()} deals`,
+          location:  location.trim(),
+          status,
+          price_max: maxPrice ? parseInt(maxPrice, 10) : null,
+          beds_min:  parseInt(minBeds, 10) || null,
+          baths_min: parseInt(minBaths, 10) || null,
+          min_score: parseInt(saveMinScore, 10) || 60,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setSaveError(data.error ?? "Failed to save"); return; }
+      setSaveModalOpen(false);
+      showToast("Search saved! We'll email you new deals weekly.");
+    } catch {
+      setSaveError("Network error — please try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function toggleCompare(id: string) {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -363,29 +411,64 @@ export default function FindPage() {
               {response!.total_analyzed} of {response!.total_found} properties analyzed
               {response!.errors > 0 && ` · ${response!.errors} failed`}
             </p>
-            <Link
-              href="/dashboard"
-              style={{
-                height: 30,
-                padding: "0 12px",
-                background: "rgba(91,91,214,0.10)",
-                border: "1px solid rgba(91,91,214,0.25)",
-                borderRadius: 6,
-                fontSize: 11,
-                fontWeight: 600,
-                color: "var(--accent)",
-                textDecoration: "none",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-              }}
-            >
-              <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M4 6h16M4 10h16M4 14h10" />
-              </svg>
-              View in portfolio
-            </Link>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={openSaveModal}
+                style={{
+                  height: 30,
+                  padding: "0 12px",
+                  background: "transparent",
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: 6,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: "var(--text-secondary)",
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  transition: "border-color 0.12s, color 0.12s",
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.borderColor = "var(--accent)";
+                  (e.currentTarget as HTMLElement).style.color = "var(--accent)";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.borderColor = "var(--border-subtle)";
+                  (e.currentTarget as HTMLElement).style.color = "var(--text-secondary)";
+                }}
+              >
+                <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+                Save as alert
+              </button>
+              <Link
+                href="/dashboard"
+                style={{
+                  height: 30,
+                  padding: "0 12px",
+                  background: "rgba(91,91,214,0.10)",
+                  border: "1px solid rgba(91,91,214,0.25)",
+                  borderRadius: 6,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: "var(--accent)",
+                  textDecoration: "none",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M4 6h16M4 10h16M4 14h10" />
+                </svg>
+                View in portfolio
+              </Link>
+            </div>
           </div>
 
           {/* Table container */}
@@ -563,6 +646,81 @@ export default function FindPage() {
           >
             Compare ({selectedIds.size})
           </Link>
+        </div>
+      )}
+
+      {/* ── Save as alert modal ───────────────────────────────────────────── */}
+      {saveModalOpen && (
+        <div
+          className="ps-modal-backdrop"
+          onClick={(e) => { if (e.target === e.currentTarget) setSaveModalOpen(false); }}
+        >
+          <div className="ps-modal">
+            <h2 style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)", letterSpacing: "-0.015em", marginBottom: 16 }}>
+              Save search as alert
+            </h2>
+
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>
+                Alert name
+              </label>
+              <input
+                type="text"
+                value={saveName}
+                onChange={(e) => setSaveName(e.target.value)}
+                style={{ width: "100%", background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", borderRadius: 7, padding: "9px 12px", fontSize: 13, color: "var(--text-primary)", fontFamily: "inherit", outline: "none", boxSizing: "border-box" }}
+                autoFocus
+              />
+            </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>
+                Min score (0–100)
+              </label>
+              <input
+                type="number"
+                value={saveMinScore}
+                onChange={(e) => setSaveMinScore(e.target.value)}
+                min={0}
+                max={100}
+                style={{ width: "100%", background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", borderRadius: 7, padding: "9px 12px", fontSize: 13, color: "var(--text-primary)", fontFamily: "inherit", outline: "none", boxSizing: "border-box" }}
+              />
+            </div>
+
+            {saveError && (
+              <p style={{ fontSize: 12, color: "var(--score-red)", marginBottom: 14 }}>{saveError}</p>
+            )}
+
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setSaveModalOpen(false)}
+                disabled={saving}
+                style={{ padding: "8px 16px", borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: "pointer", border: "1px solid var(--border-subtle)", background: "transparent", color: "var(--text-secondary)", fontFamily: "inherit" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveAlert}
+                disabled={saving || !saveName.trim()}
+                style={{ padding: "8px 16px", borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: saving || !saveName.trim() ? "not-allowed" : "pointer", border: "none", background: saving || !saveName.trim() ? "rgba(91,91,214,0.4)" : "var(--accent)", color: "#fff", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 7 }}
+              >
+                {saving && (
+                  <svg width="12" height="12" fill="none" viewBox="0 0 24 24" style={{ animation: "spin 0.8s linear infinite" }}>
+                    <circle cx={12} cy={12} r={10} stroke="currentColor" strokeWidth={4} opacity={0.25} />
+                    <path fill="currentColor" opacity={0.75} d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                )}
+                {saving ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Toast ─────────────────────────────────────────────────────────── */}
+      {toast && (
+        <div className="ps-toast" style={{ color: toast.ok ? "var(--score-green)" : "var(--score-red)" }}>
+          {toast.msg}
         </div>
       )}
 
