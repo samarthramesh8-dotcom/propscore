@@ -31,11 +31,15 @@ interface TooltipProps {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const RATE_OPTIONS    = [5.5, 6.0, 6.5, 7.0, 7.5, 8.0] as const;
-const DOWN_OPTIONS    = [20, 25, 30]                     as const;
-const DEFAULT_RATE    = 7.0;
-const DEFAULT_DOWN    = 25;
-const AMORT_MONTHS    = 360; // 30-year fixed
+const RATE_OPTIONS        = [5.5, 6.0, 6.5, 7.0, 7.5, 8.0] as const;
+const DOWN_OPTIONS        = [20, 25, 30]                     as const;
+const RENT_GROWTH_OPTIONS = [1, 2, 3, 4, 5]                 as const;
+const APPRECIATION_OPTIONS = [1, 2, 3, 4, 5]                as const;
+const DEFAULT_RATE         = 7.0;
+const DEFAULT_DOWN         = 25;
+const DEFAULT_RENT_GROWTH  = 3;
+const DEFAULT_APPRECIATION = 3;
+const AMORT_MONTHS         = 360; // 30-year fixed
 
 const LINES = [
   { key: "Gross Income", color: "#00D26A" },
@@ -144,8 +148,10 @@ interface Props {
 }
 
 export default function CashFlowChart({ listingText, rentcastEstimate, mudRate }: Props) {
-  const [rate,    setRate]    = useState<number>(DEFAULT_RATE);
-  const [downPct, setDownPct] = useState<number>(DEFAULT_DOWN);
+  const [rate,           setRate]           = useState<number>(DEFAULT_RATE);
+  const [downPct,        setDownPct]        = useState<number>(DEFAULT_DOWN);
+  const [rentGrowthPct,  setRentGrowthPct]  = useState<number>(DEFAULT_RENT_GROWTH);
+  const [appreciationPct, setAppreciationPct] = useState<number>(DEFAULT_APPRECIATION);
 
   // ── Parse stored listing_text ────────────────────────────────────────────
   const listPrice = parseDollar(
@@ -185,9 +191,9 @@ export default function CashFlowChart({ listingText, rentcastEstimate, mudRate }
     const annualMort_   = monthlyMort_ * 12;
 
     const chartData_: ChartRow[] = Array.from({ length: 15 }, (_, i) => {
-      const annualGross  = monthlyRent * 12 * Math.pow(1.03, i);
+      const annualGross  = monthlyRent * 12 * Math.pow(1 + rentGrowthPct / 100, i);
       const noi          = annualGross * 0.55;
-      const appreciation = listPrice * Math.pow(1.03, i) * 0.03;
+      const appreciation = listPrice * Math.pow(1 + appreciationPct / 100, i) * (appreciationPct / 100);
       const mudTax       = hasMud_ ? annualMudTaxYr1_ : 0;
       const cashFlow     = noi - annualMort_ - mudTax;
 
@@ -226,7 +232,7 @@ export default function CashFlowChart({ listingText, rentcastEstimate, mudRate }
       summaryStats:    summaryStats_,
       breakEvenYear:   breakEvenYear_,
     };
-  }, [rate, downPct, listPrice, monthlyRent, mudRate]);
+  }, [rate, downPct, rentGrowthPct, appreciationPct, listPrice, monthlyRent, mudRate]);
 
   // ── Hard stop: no list price ─────────────────────────────────────────────
   if (!computed) {
@@ -340,6 +346,24 @@ export default function CashFlowChart({ listingText, rentcastEstimate, mudRate }
             <Chip key={d} label={`${d}%`} active={downPct === d} onClick={() => setDownPct(d)} />
           ))}
         </div>
+        <div style={{ width: 1, height: 20, background: "var(--border-subtle)", flexShrink: 0 }} />
+        <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", flexShrink: 0 }}>
+          Rent Growth
+        </span>
+        <div style={{ display: "flex", gap: 4 }}>
+          {RENT_GROWTH_OPTIONS.map((g) => (
+            <Chip key={g} label={`${g}%`} active={rentGrowthPct === g} onClick={() => setRentGrowthPct(g)} />
+          ))}
+        </div>
+        <div style={{ width: 1, height: 20, background: "var(--border-subtle)", flexShrink: 0 }} />
+        <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", flexShrink: 0 }}>
+          Appreciation
+        </span>
+        <div style={{ display: "flex", gap: 4 }}>
+          {APPRECIATION_OPTIONS.map((a) => (
+            <Chip key={a} label={`${a}%`} active={appreciationPct === a} onClick={() => setAppreciationPct(a)} />
+          ))}
+        </div>
       </div>
 
       {/* ── Chart ────────────────────────────────────────────────────── */}
@@ -373,7 +397,7 @@ export default function CashFlowChart({ listingText, rentcastEstimate, mudRate }
 
       {/* ── Assumptions footnote ─────────────────────────────────────── */}
       <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 8, marginBottom: 20 }}>
-        3% annual rent growth · 3% annual appreciation · 45% expense ratio ·{" "}
+        {rentGrowthPct}% annual rent growth · {appreciationPct}% annual appreciation · 45% expense ratio ·{" "}
         <span className="font-mono">${Math.round(annualMort / 12).toLocaleString()}/mo</span>{" "}
         mortgage ({usd.format(loanAmount)} loan · {downPct}% down · {rate}%/30yr)
         {hasMud && (
