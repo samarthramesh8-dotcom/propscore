@@ -32,6 +32,25 @@ interface FindResult {
   cap_rate: string | null;
 }
 
+// ─── Geocoding ────────────────────────────────────────────────────────────────
+// Zillapi /v1/listings requires bbox=w,s,e,n — geocode the location string first.
+
+async function geocodeLocation(query: string): Promise<{ lat: number; lon: number } | null> {
+  try {
+    const params = new URLSearchParams({ q: query, format: "json", limit: "1" });
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
+      headers: { "User-Agent": "propscore/1.0" },
+    });
+    if (!res.ok) return null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const results: any[] = await res.json();
+    if (!results?.length) return null;
+    return { lat: parseFloat(results[0].lat), lon: parseFloat(results[0].lon) };
+  } catch {
+    return null;
+  }
+}
+
 // ─── System prompt (same as /api/analyze — update both when changing) ─────────
 
 const SYSTEM_PROMPT = `You are a senior real estate investment analyst with 20 years of experience managing $40M in rental assets. Your analyses inform real capital deployment decisions. Precision is your professional obligation.
@@ -281,7 +300,19 @@ export async function POST(request: NextRequest) {
       throw new Error("ZILLAPI_KEY not configured — get a free key at zillapi.com/signup");
     }
 
-    const searchParams = new URLSearchParams({ location, status });
+    // Zillapi /v1/listings requires a bounding box — geocode the location first
+    const coords = await geocodeLocation(location);
+    if (!coords) {
+      return NextResponse.json(
+        { error: `Could not geocode "${location}". Try being more specific, e.g. "Austin, TX" or "78759".` },
+        { status: 400 },
+      );
+    }
+    // ~0.3° ≈ 20 miles radius → 40×40 mile search area
+    const BBOX_DEG = 0.3;
+    const bbox = `${coords.lon - BBOX_DEG},${coords.lat - BBOX_DEG},${coords.lon + BBOX_DEG},${coords.lat + BBOX_DEG}`;
+
+    const searchParams = new URLSearchParams({ bbox, status });
     if (price_max)  searchParams.set("price_max",  String(price_max));
     if (beds_min)   searchParams.set("beds_min",   String(beds_min));
     if (baths_min)  searchParams.set("baths_min",  String(baths_min));
