@@ -329,23 +329,60 @@ export default function DashboardClient({ initialList }: { initialList: Property
         {/* ── Property list ─────────────────────────────────────────── */}
         <div className="ps-dashboard-content" style={{ padding: "24px 36px" }}>
           {!count ? (
-            /* Empty state */
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "80px 0", textAlign: "center" }}>
-              <div style={{ width: 48, height: 48, borderRadius: 10, background: "var(--bg-surface)", border: "1px solid var(--border-subtle)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
-                <svg width="22" height="22" fill="none" stroke="var(--text-muted)" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
+            /* ── Welcome / onboarding ─────────────────────────────── */
+            <div style={{ padding: "48px 0 32px" }}>
+              <div style={{ textAlign: "center", marginBottom: 32 }}>
+                <h2 style={{ fontSize: 20, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.025em", marginBottom: 8 }}>
+                  Welcome to PropScore
+                </h2>
+                <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+                  Analyze any U.S. rental property in under 30 seconds.
+                </p>
               </div>
-              <h3 style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", letterSpacing: "-0.01em", marginBottom: 8 }}>
-                No properties yet
-              </h3>
-              <p style={{ fontSize: 12, color: "var(--text-muted)", maxWidth: 280, lineHeight: 1.6, marginBottom: 20 }}>
-                Paste a Zillow URL to get a data-backed investment score — cap rate, rent yield, school ratings and more.
-              </p>
-              <Link href="/analyze" className="ps-btn-accent" style={{ color: "#fff", fontSize: 12, fontWeight: 600, padding: "9px 18px", borderRadius: 7, textDecoration: "none" }}>
-                Analyze your first property
-              </Link>
+              <div className="ps-onboarding-grid">
+                {/* Card 1 — Analyze */}
+                <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-subtle)", borderRadius: 10, padding: 20 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 8, background: "var(--bg-elevated)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
+                    <svg width="18" height="18" fill="none" stroke="var(--accent)" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                  </div>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)", marginBottom: 6 }}>Analyze a property</p>
+                  <p style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.6, marginBottom: 16 }}>Paste a Zillow URL to get a full investment score.</p>
+                  <Link href="/analyze" className="ps-btn-accent" style={{ display: "inline-block", color: "#fff", fontSize: 12, fontWeight: 600, padding: "8px 14px", borderRadius: 7, textDecoration: "none" }}>
+                    Start analyzing →
+                  </Link>
+                </div>
+                {/* Card 2 — Deal Finder */}
+                <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-subtle)", borderRadius: 10, padding: 20 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 8, background: "var(--bg-elevated)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
+                    <svg width="18" height="18" fill="none" stroke="var(--accent)" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </div>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)", marginBottom: 6 }}>Find deals in a market</p>
+                  <p style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.6, marginBottom: 16 }}>Search active listings and score them in bulk.</p>
+                  <Link href="/find" className="ps-btn-accent" style={{ display: "inline-block", color: "#fff", fontSize: 12, fontWeight: 600, padding: "8px 14px", borderRadius: 7, textDecoration: "none" }}>
+                    Open deal finder →
+                  </Link>
+                </div>
+                {/* Card 3 — Alerts */}
+                <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-subtle)", borderRadius: 10, padding: 20 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 8, background: "var(--bg-elevated)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
+                    <svg width="18" height="18" fill="none" stroke="var(--accent)" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                        d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                    </svg>
+                  </div>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)", marginBottom: 6 }}>Set up weekly alerts</p>
+                  <p style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.6, marginBottom: 16 }}>Get emailed when new deals match your criteria.</p>
+                  <Link href="/alerts" className="ps-btn-accent" style={{ display: "inline-block", color: "#fff", fontSize: 12, fontWeight: 600, padding: "8px 14px", borderRadius: 7, textDecoration: "none" }}>
+                    Create an alert →
+                  </Link>
+                </div>
+              </div>
             </div>
           ) : visible.length === 0 ? (
             /* No filter matches */

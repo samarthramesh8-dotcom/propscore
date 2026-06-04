@@ -38,7 +38,15 @@
       "Bash(curl -s http://localhost:3000/login)",
       "Bash(vercel --version)",
       "Bash(git push *)",
-      "Bash(git fetch *)"
+      "Bash(git fetch *)",
+      "Bash(mkdir -p \"C:\\\\Users\\\\samar\\\\OneDrive\\\\Documents\\\\Claude\\\\Projects\\\\Real Estate Finder\\\\app\\\\demo\\\\dashboard\" && mkdir -p \"C:\\\\Users\\\\samar\\\\OneDrive\\\\Documents\\\\Claude\\\\Projects\\\\Real Estate Finder\\\\app\\\\demo\\\\property\\\\[id]\")",
+      "Bash(mkdir -p \"C:\\\\Users\\\\samar\\\\OneDrive\\\\Documents\\\\Claude\\\\Projects\\\\Real Estate Finder\\\\app\\\\share\\\\[token]\")",
+      "PowerShell(Rename-Item -Path \"C:\\\\Users\\\\samar\\\\OneDrive\\\\Documents\\\\Claude\\\\Projects\\\\Real Estate Finder\\\\proxy.ts\" -NewName \"middleware.ts\")",
+      "Bash(git rm *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\samar\\\\OneDrive\\\\Documents\\\\Claude\\\\Projects\\\\Real Estate Finder\\\\lib\" -File)",
+      "Bash(Select-Object Name)",
+      "Bash(mkdir -p \"C:\\\\Users\\\\samar\\\\OneDrive\\\\Documents\\\\Claude\\\\Projects\\\\Real Estate Finder\\\\app\\\\api\\\\cron\\\\alerts\" 2>/dev/null; mkdir -p \"C:\\\\Users\\\\samar\\\\OneDrive\\\\Documents\\\\Claude\\\\Projects\\\\Real Estate Finder\\\\app\\\\api\\\\saved-searches\\\\[id]\" 2>/dev/null; echo \"done\")",
+      "Bash(findstr analytics *)"
     ]
   }
 }

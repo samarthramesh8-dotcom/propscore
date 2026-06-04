@@ -227,6 +227,16 @@ body {
   .ps-chart-controls   { gap: 8px !important; }
 }
 
+/* ─── Onboarding grid ────────────────────────────────────── */
+.ps-onboarding-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+@media (max-width: 767px) {
+  .ps-onboarding-grid { grid-template-columns: 1fr; }
+}
+
 /* ─── Responsive ─────────────────────────────────────────── */
 
 /* Desktop: sidebar shows as column; bottom nav is hidden */

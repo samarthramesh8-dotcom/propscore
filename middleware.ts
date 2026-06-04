@@ -2,12 +2,15 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 // Pages that never need an auth check — return immediately.
+// Everything else (including /dashboard, /analyze, /find, /alerts, /settings,
+// /compare, /property/*) is protected and redirects to /login if unauthenticated.
 const PUBLIC_PATHS = [
   "/login",
   "/forgot-password",
   "/reset-password",
   "/auth/callback",
   "/demo",   // guest / demo routes — no auth required
+  "/share",  // public share links (/share/[token])
 ];
 
 function isPublic(pathname: string) {
