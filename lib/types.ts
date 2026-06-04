@@ -47,3 +47,25 @@ export interface SharedAnalysis {
   property_id: string;
   created_at: string;
 }
+
+export interface SavedSearch {
+  id:          string;
+  user_id:     string;
+  name:        string;
+  location:    string;
+  status:      string;
+  price_max:   number | null;
+  beds_min:    number | null;
+  baths_min:   number | null;
+  min_score:   number;
+  created_at:  string;
+  last_run_at: string | null;
+  is_active:   boolean;
+}
+
+export interface AlertResult {
+  id:              string;
+  saved_search_id: string;
+  property_id:     string;
+  sent_at:         string;
+}

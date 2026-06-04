@@ -76,3 +76,51 @@ CREATE POLICY IF NOT EXISTS "Public: properties readable via share link"
     auth.uid() = user_id
     OR EXISTS (SELECT 1 FROM shared_analyses WHERE property_id = properties.id)
   );
+
+-- ── Saved searches & email alerts ────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS saved_searches (
+  id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     uuid        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  name        text        NOT NULL,
+  location    text        NOT NULL,
+  status      text        NOT NULL DEFAULT 'for_sale',
+  price_max   numeric,
+  beds_min    integer,
+  baths_min   integer,
+  min_score   integer     NOT NULL DEFAULT 60,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  last_run_at timestamptz,
+  is_active   boolean     NOT NULL DEFAULT true
+);
+
+ALTER TABLE saved_searches ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY IF NOT EXISTS "Users can manage own saved searches"
+  ON saved_searches FOR ALL
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE INDEX IF NOT EXISTS idx_saved_searches_user_id
+  ON saved_searches(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_saved_searches_active
+  ON saved_searches(is_active) WHERE is_active = true;
+
+-- Tracks which properties were already emailed to avoid duplicates
+CREATE TABLE IF NOT EXISTS alert_results (
+  id              uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  saved_search_id uuid        NOT NULL REFERENCES saved_searches(id) ON DELETE CASCADE,
+  property_id     uuid        NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
+  sent_at         timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(saved_search_id, property_id)
+);
+
+ALTER TABLE alert_results ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY IF NOT EXISTS "Users can read own alert results"
+  ON alert_results FOR SELECT
+  USING (
+    auth.uid() = (
+      SELECT user_id FROM saved_searches WHERE id = saved_search_id
+    )
+  );
