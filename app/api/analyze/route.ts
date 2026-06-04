@@ -171,7 +171,12 @@ async function fetchViaZillapi(zillowUrl: string): Promise<AnalysisInput> {
   const json = await res.json();
 
   if (!res.ok || json.error) {
-    throw new Error(json.detail || json.error || `Zillapi error ${res.status}`);
+    const errMsg =
+      typeof json.detail  === "string" ? json.detail  :
+      typeof json.error   === "string" ? json.error   :
+      typeof json.message === "string" ? json.message :
+      json.error ? JSON.stringify(json.error) : `Zillapi error ${res.status}`;
+    throw new Error(errMsg);
   }
 
   // Extract address components to pass to Rentcast
