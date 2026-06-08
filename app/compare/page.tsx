@@ -53,11 +53,7 @@ export default async function ComparePage({
   if (ids.length >= 2) {
     const { data } = await supabase
       .from("properties")
-      .select(
-        "id, user_id, address, listing_text, overall_score, subscores, " +
-        "verdict, bull_case, bear_case, rentcast_estimate, rentcast_comps, " +
-        "mud_rate, notes, created_at, updated_at, source, zillow_url"
-      )
+      .select("*")
       .in("id", ids)
       .eq("user_id", user.id);
 

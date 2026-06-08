@@ -15,11 +15,7 @@ export default async function DashboardPage() {
 
   const { data: properties } = await supabase
     .from("properties")
-    .select(
-      "id, user_id, address, listing_text, overall_score, subscores, " +
-      "verdict, bull_case, bear_case, rentcast_estimate, rentcast_comps, " +
-      "mud_rate, notes, created_at, updated_at, source, zillow_url"
-    )
+    .select("*")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 

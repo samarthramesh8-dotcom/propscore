@@ -245,6 +245,14 @@ function parseClaudeJson(raw: string): Record<string, unknown> {
   throw new Error("Claude returned an unexpected response. Please try again.");
 }
 
+// Catches both PostgreSQL 42703 (undefined_column) and PostgREST PGRST204
+// (schema cache miss) — both indicate the DB migration hasn't been run yet.
+function isSchemaMissing(err: { code?: string; message?: string } | null): boolean {
+  if (!err) return false;
+  return err.code === "42703" || err.code === "PGRST204" ||
+    (typeof err.message === "string" && err.message.includes("schema cache"));
+}
+
 const URL_RE = /^https?:\/\/\S+$/;
 
 export async function POST(request: NextRequest) {
@@ -342,7 +350,7 @@ export async function POST(request: NextRequest) {
       data  = up.data;
       error = up.error;
 
-      if (error?.code === "42703") {
+      if (isSchemaMissing(error)) {
         const { address, listing_text, overall_score, subscores, verdict, bull_case, bear_case } = analysisPayload;
         const fallback = await supabase
           .from("properties")
@@ -371,11 +379,12 @@ export async function POST(request: NextRequest) {
       data  = ins.data;
       error = ins.error;
 
-      // PostgreSQL error code 42703 = "undefined_column" — migration not yet run.
-      if (error?.code === "42703") {
+      // 42703 = PostgreSQL "undefined_column"; PGRST204 = PostgREST schema cache miss.
+      // Both mean the migration hasn't been run yet.
+      if (isSchemaMissing(error)) {
         console.warn(
           "/api/analyze: new columns missing — run the DB migration. " +
-          "Falling back to base insert without rentcast/mud fields."
+          "Falling back to base insert without rentcast/mud/rich_data fields."
         );
         const { address, listing_text, overall_score, subscores, verdict, bull_case, bear_case } = analysisPayload;
         const fallback = await supabase
