@@ -9,7 +9,8 @@ ALTER TABLE properties ADD COLUMN IF NOT EXISTS rentcast_comps    jsonb;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS mud_rate          numeric;
 
 -- ── Feature 1: Delete policy ──────────────────────────────────────────────────
-CREATE POLICY IF NOT EXISTS "Users can delete own properties"
+DROP POLICY IF EXISTS "Users can delete own properties" ON properties;
+CREATE POLICY "Users can delete own properties"
   ON properties FOR DELETE
   USING (auth.uid() = user_id);
 
@@ -32,7 +33,8 @@ CREATE TRIGGER properties_updated_at
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 -- Policy to allow users to update their own properties (re-analyze + notes)
-CREATE POLICY IF NOT EXISTS "Users can update own properties"
+DROP POLICY IF EXISTS "Users can update own properties" ON properties;
+CREATE POLICY "Users can update own properties"
   ON properties FOR UPDATE
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
@@ -51,11 +53,13 @@ ALTER TABLE shared_analyses ADD COLUMN IF NOT EXISTS expires_at timestamptz NOT 
 
 ALTER TABLE shared_analyses ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "Anyone can read shared analyses"
+DROP POLICY IF EXISTS "Anyone can read shared analyses" ON shared_analyses;
+CREATE POLICY "Anyone can read shared analyses"
   ON shared_analyses FOR SELECT
   USING (true);
 
-CREATE POLICY IF NOT EXISTS "Property owners can create shares"
+DROP POLICY IF EXISTS "Property owners can create shares" ON shared_analyses;
+CREATE POLICY "Property owners can create shares"
   ON shared_analyses FOR INSERT
   WITH CHECK (
     auth.uid() = (SELECT user_id FROM properties WHERE id = property_id)
@@ -74,7 +78,8 @@ ALTER TABLE properties ADD COLUMN IF NOT EXISTS zillow_url text;
 
 -- Allow properties to be read publicly when they have a share link
 -- (token is 32 random hex chars — effectively unguessable)
-CREATE POLICY IF NOT EXISTS "Public: properties readable via share link"
+DROP POLICY IF EXISTS "Public: properties readable via share link" ON properties;
+CREATE POLICY "Public: properties readable via share link"
   ON properties FOR SELECT
   USING (
     auth.uid() = user_id
@@ -99,7 +104,8 @@ CREATE TABLE IF NOT EXISTS saved_searches (
 
 ALTER TABLE saved_searches ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "Users can manage own saved searches"
+DROP POLICY IF EXISTS "Users can manage own saved searches" ON saved_searches;
+CREATE POLICY "Users can manage own saved searches"
   ON saved_searches FOR ALL
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
@@ -121,7 +127,8 @@ CREATE TABLE IF NOT EXISTS alert_results (
 
 ALTER TABLE alert_results ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "Users can read own alert results"
+DROP POLICY IF EXISTS "Users can read own alert results" ON alert_results;
+CREATE POLICY "Users can read own alert results"
   ON alert_results FOR SELECT
   USING (
     auth.uid() = (
