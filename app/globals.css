@@ -109,8 +109,8 @@ body {
 }
 .ps-prop-card:hover .ps-prop-address { color: var(--accent); }
 
-/* Delete button — revealed on card hover */
-.ps-delete-btn { opacity: 0; transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease; }
+/* Delete button — faint at rest, fully revealed on card hover */
+.ps-delete-btn { opacity: 0.35; transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease; }
 .ps-prop-card:hover .ps-delete-btn { opacity: 1; }
 .ps-delete-btn:hover { color: var(--score-red) !important; border-color: rgba(232,56,79,0.35) !important; }
 

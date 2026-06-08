@@ -43,8 +43,33 @@ export default function PropertyActions({
         .single();
       if (error) throw error;
       const url = `${window.location.origin}/share/${data.token}`;
-      await navigator.clipboard.writeText(url);
-      showToast("Share link copied to clipboard!");
+
+      // Try modern clipboard API first, fall back to legacy execCommand
+      let copied = false;
+      try {
+        await navigator.clipboard.writeText(url);
+        copied = true;
+      } catch {
+        try {
+          const el = document.createElement("textarea");
+          el.value = url;
+          el.style.cssText = "position:fixed;opacity:0;pointer-events:none";
+          document.body.appendChild(el);
+          el.select();
+          copied = document.execCommand("copy");
+          document.body.removeChild(el);
+        } catch {
+          copied = false;
+        }
+      }
+
+      if (copied) {
+        showToast("Share link copied to clipboard!");
+      } else {
+        // Link was created but clipboard not available — prompt user to copy manually
+        prompt("Copy this link to share:", url);
+        showToast("Share link created!");
+      }
     } catch {
       showToast("Failed to create share link", false);
     } finally {

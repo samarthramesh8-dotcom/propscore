@@ -14,16 +14,20 @@ export default function NotesField({ propertyId, initialNotes }: Props) {
   const [error, setError]   = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debounceRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const notesRef     = useRef(notes);
+  const hasMounted   = useRef(false);
+
+  // Keep ref in sync so `save` always writes the latest text
+  notesRef.current = notes;
 
   const save = useCallback(async () => {
-    if (saving) return;
     setSaving(true);
     setError(false);
     const supabase = createClient();
     const { error: err } = await supabase
       .from("properties")
-      .update({ notes: notes.trim() || null })
+      .update({ notes: notesRef.current.trim() || null })
       .eq("id", propertyId);
 
     setSaving(false);
@@ -34,17 +38,21 @@ export default function NotesField({ propertyId, initialNotes }: Props) {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     }
-  }, [propertyId, notes, saving]);
+  }, [propertyId]);
 
-  // Debounced auto-save: fires 500 ms after the user stops typing
+  // Debounced auto-save: fires 500 ms after the user stops typing.
+  // Skipped on first render so opening a property page doesn't trigger a write.
   useEffect(() => {
+    if (!hasMounted.current) {
+      hasMounted.current = true;
+      return;
+    }
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => { save(); }, 500);
+    debounceRef.current = setTimeout(save, 500);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [notes]);
+  }, [notes, save]);
 
   return (
     <div>

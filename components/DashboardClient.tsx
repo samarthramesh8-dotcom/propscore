@@ -129,14 +129,16 @@ export default function DashboardClient({ initialList }: { initialList: Property
     if (!deleteTargetId) return;
     setDeleting(true);
     const supabase = createClient();
-    const { error } = await supabase.from("properties").delete().eq("id", deleteTargetId);
+    const targetId = deleteTargetId; // snapshot id before any async state can change
+    const { error } = await supabase.from("properties").delete().eq("id", targetId);
     if (error) {
       showToast("Failed to delete — try again", false);
-    } else {
-      setList((prev) => prev.filter((p) => p.id !== deleteTargetId));
-      setSelectedIds((prev) => { const next = new Set(prev); next.delete(deleteTargetId); return next; });
-      showToast("Property deleted");
+      setDeleting(false);
+      return; // keep modal open so user can retry
     }
+    setList((prev) => prev.filter((p) => p.id !== targetId));
+    setSelectedIds((prev) => { const next = new Set(prev); next.delete(targetId); return next; });
+    showToast("Property deleted");
     setDeleting(false);
     setDeleteId(null);
   }
