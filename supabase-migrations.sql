@@ -68,6 +68,10 @@ CREATE INDEX IF NOT EXISTS idx_shared_analyses_property_id ON shared_analyses(pr
 -- ── Deal Finder: source tracking ──────────────────────────────────────────────
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS source text;
 
+-- Rich Zillow data: photos, price history, schools, facts
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS rich_data jsonb;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS zillow_url text;
+
 -- Allow properties to be read publicly when they have a share link
 -- (token is 32 random hex chars — effectively unguessable)
 CREATE POLICY IF NOT EXISTS "Public: properties readable via share link"

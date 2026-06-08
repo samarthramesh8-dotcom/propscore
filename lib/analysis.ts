@@ -21,6 +21,55 @@ export interface RentcastResult {
   comparables: RentcastComp[];
 }
 
+export interface PropertyPhoto {
+  url: string;
+  caption?: string;
+  width?: number;
+  height?: number;
+}
+
+export interface PriceHistoryEntry {
+  date: string;
+  price: number;
+  event: string;
+  priceChangeRate?: number;
+}
+
+export interface SchoolInfo {
+  name: string;
+  type: string;
+  grades: string;
+  rating: number;
+  distance?: number;
+}
+
+export interface ZillowRichData {
+  photos: PropertyPhoto[];
+  priceHistory: PriceHistoryEntry[];
+  schools: SchoolInfo[];
+  description: string;
+  facts: { label: string; value: string }[];
+  listingUrl: string;
+  zestimate: number | null;
+  rentZestimate: number | null;
+  taxAssessedValue: number | null;
+  monthlyHoaFee: number | null;
+  pricePerSqft: number | null;
+  lotSize: number | null;
+  parkingSpaces: number | null;
+  basement: string | null;
+  heating: string | null;
+  cooling: string | null;
+  appliances: string | null;
+  flooring: string | null;
+  roof: string | null;
+  exteriorFeatures: string | null;
+  mlsId: string | null;
+  daysOnZillow: number | null;
+  pageViewCount: number | null;
+  favoriteCount: number | null;
+}
+
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
 // Walk a nested object and find a value by any of the given key names
@@ -377,9 +426,161 @@ async function fetchRentcastEstimate(
   }
 }
 
+// ─── Rich data extraction ─────────────────────────────────────────────────────
+
+export function extractRichData(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  json: any,
+  url: string
+): ZillowRichData {
+  try {
+    const d = json?.data ?? json;
+    const resoFacts = d?.resoFacts ?? d?.homeFacts ?? {};
+
+    // Photos — dig into mixedSources.jpeg or flat url field
+    const rawPhotos: PropertyPhoto[] = [];
+    const photoSources = d?.photos ?? d?.images ?? [];
+    for (const p of photoSources) {
+      const jpegs = p?.mixedSources?.jpeg ?? [];
+      if (jpegs.length > 0) {
+        // Take highest width
+        const best = jpegs.reduce(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (a: any, b: any) => ((b?.width ?? 0) > (a?.width ?? 0) ? b : a),
+          jpegs[0]
+        );
+        if (best?.url) rawPhotos.push({ url: best.url, width: best.width });
+      } else if (p?.url) {
+        rawPhotos.push({ url: p.url });
+      }
+    }
+
+    // Price history
+    const rawHistory: PriceHistoryEntry[] = (d?.priceHistory ?? [])
+      .slice(0, 20)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .map((h: any) => ({
+        date: h?.date ?? "",
+        price: h?.price ?? 0,
+        event: h?.event ?? "",
+        priceChangeRate: h?.priceChangeRate ?? undefined,
+      }));
+
+    // Schools
+    const rawSchools: SchoolInfo[] = (
+      d?.schools ?? d?.assignedSchools ?? []
+    )
+      .slice(0, 6)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .map((s: any) => ({
+        name: s?.name ?? "",
+        type: s?.type ?? s?.schoolType ?? "",
+        grades: s?.grades ?? "",
+        rating: s?.rating ?? 0,
+        distance: s?.distance ?? undefined,
+      }));
+
+    // Helper to join arrays
+    const joinArr = (v: unknown): string | null => {
+      if (!v) return null;
+      if (Array.isArray(v)) return v.filter(Boolean).join(", ") || null;
+      return String(v) || null;
+    };
+
+    const heating    = joinArr(resoFacts?.heating);
+    const cooling    = joinArr(resoFacts?.cooling);
+    const appliances = joinArr(resoFacts?.appliances);
+    const flooring   = joinArr(resoFacts?.flooring);
+    const exterior   = joinArr(
+      resoFacts?.exteriorFeatures ?? resoFacts?.exteriorMaterial
+    );
+    const roof       = resoFacts?.roof ? String(resoFacts.roof) : null;
+    const basement   = resoFacts?.basement
+      ? String(resoFacts.basement)
+      : null;
+    const parking    =
+      resoFacts?.parkingCapacity ??
+      resoFacts?.garageParkingCapacity ??
+      null;
+    const mlsId =
+      resoFacts?.mlsId ?? resoFacts?.listingId ?? d?.mlsId ?? null;
+
+    const price      = d?.price ?? d?.listPrice ?? null;
+    const sqft       = d?.livingArea ?? d?.sqft ?? null;
+    const pricePerSqft =
+      price && sqft ? Math.round(price / sqft) : null;
+
+    // Build facts array for display
+    const facts: { label: string; value: string }[] = [];
+    const addFact = (label: string, value: unknown, suffix = "") => {
+      if (value === null || value === undefined || value === "") return;
+      facts.push({ label, value: `${value}${suffix}` });
+    };
+    addFact("MLS ID",            mlsId);
+    addFact("Days on Zillow",    d?.daysOnZillow ?? d?.daysOnMarket);
+    addFact("Page views",        d?.pageViewCount);
+    addFact("Saves",             d?.favoriteCount ?? d?.favoriteCountFormatted);
+    addFact("Parking spaces",    parking);
+    addFact("Basement",          basement);
+    addFact("Roof",              roof);
+    addFact("Heating",           heating);
+    addFact("Cooling",           cooling);
+    addFact("Appliances",        appliances);
+    addFact("Flooring",          flooring);
+    addFact("Exterior",          exterior);
+    addFact("Laundry",           joinArr(resoFacts?.laundryFeatures));
+    addFact("Lot features",      joinArr(resoFacts?.lotFeaturess ?? resoFacts?.lotFeatures));
+    addFact("Interior features", joinArr(resoFacts?.interiorFeatures));
+    addFact("Community",         joinArr(resoFacts?.communityFeatures));
+    addFact("HOA includes",      joinArr(resoFacts?.hoaIncludes));
+
+    return {
+      photos:           rawPhotos.slice(0, 24),
+      priceHistory:     rawHistory,
+      schools:          rawSchools,
+      description:      d?.description ?? "",
+      facts,
+      listingUrl:       url,
+      zestimate:        d?.zestimate ?? null,
+      rentZestimate:    d?.rentZestimate ?? null,
+      taxAssessedValue: d?.taxAssessedValue ?? null,
+      monthlyHoaFee:    d?.monthlyHoaFee ?? d?.hoaFee ?? null,
+      pricePerSqft,
+      lotSize:          d?.lotSize ?? d?.lotAreaValue ?? null,
+      parkingSpaces:    parking,
+      basement,
+      heating,
+      cooling,
+      appliances,
+      flooring,
+      roof,
+      exteriorFeatures: exterior,
+      mlsId:            mlsId ? String(mlsId) : null,
+      daysOnZillow:     d?.daysOnZillow ?? d?.daysOnMarket ?? null,
+      pageViewCount:    d?.pageViewCount ?? null,
+      favoriteCount:    d?.favoriteCount ?? null,
+    };
+  } catch {
+    return {
+      photos: [], priceHistory: [], schools: [], description: "",
+      facts: [], listingUrl: url, zestimate: null, rentZestimate: null,
+      taxAssessedValue: null, monthlyHoaFee: null, pricePerSqft: null,
+      lotSize: null, parkingSpaces: null, basement: null, heating: null,
+      cooling: null, appliances: null, flooring: null, roof: null,
+      exteriorFeatures: null, mlsId: null, daysOnZillow: null,
+      pageViewCount: null, favoriteCount: null,
+    };
+  }
+}
+
 // ─── Zillapi property fetch ───────────────────────────────────────────────────
 
-export async function fetchViaZillapi(zillowUrl: string): Promise<AnalysisInput> {
+export async function fetchViaZillapi(zillowUrl: string): Promise<{
+  listingText: string;
+  rentcast: RentcastResult | null;
+  richData: ZillowRichData | null;
+  zillowUrl: string;
+}> {
   const apiKey = process.env.ZILLAPI_KEY;
   if (!apiKey || apiKey === "your_zillapi_key") {
     throw new Error("ZILLAPI_KEY not configured");
@@ -423,6 +624,7 @@ export async function fetchViaZillapi(zillowUrl: string): Promise<AnalysisInput>
 
   const zillapiText = formatZillapiForClaude(json, zillowUrl);
   const listingText = zillapiText + (rentcast ? formatRentcastForClaude(rentcast) : "");
+  const richData = extractRichData(json, zillowUrl);
 
-  return { listingText, rentcast };
+  return { listingText, rentcast, richData, zillowUrl };
 }

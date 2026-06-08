@@ -53,14 +53,18 @@ export default async function ComparePage({
   if (ids.length >= 2) {
     const { data } = await supabase
       .from("properties")
-      .select("*")
+      .select(
+        "id, user_id, address, listing_text, overall_score, subscores, " +
+        "verdict, bull_case, bear_case, rentcast_estimate, rentcast_comps, " +
+        "mud_rate, notes, created_at, updated_at, source, zillow_url"
+      )
       .in("id", ids)
       .eq("user_id", user.id);
 
     if (data) {
       // Preserve the URL order so column positions match what the user selected
       properties = ids
-        .map((id) => (data as Property[]).find((p) => p.id === id))
+        .map((id) => (data as unknown as Property[]).find((p) => p.id === id))
         .filter((p): p is Property => !!p);
     }
   }

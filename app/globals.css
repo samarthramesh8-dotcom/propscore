@@ -237,6 +237,16 @@ body {
   .ps-onboarding-grid { grid-template-columns: 1fr; }
 }
 
+/* ─── 3-column grid (schools) ────────────────────────────────── */
+.ps-grid-3col {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+@media (max-width: 767px) {
+  .ps-grid-3col { grid-template-columns: 1fr; }
+}
+
 /* ─── Responsive ─────────────────────────────────────────── */
 
 /* Desktop: sidebar shows as column; bottom nav is hidden */

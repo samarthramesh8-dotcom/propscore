@@ -4,11 +4,13 @@ import { createClient } from "@/lib/supabase/server";
 import {
   RentcastComp,
   RentcastResult,
+  ZillowRichData,
   dig,
   formatZillapiForClaude,
   formatRentcastForClaude,
   formatMudForClaude,
   appendFinancials,
+  extractRichData,
 } from "@/lib/analysis";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -19,6 +21,8 @@ export type { RentcastComp };
 interface AnalysisInput {
   listingText: string;
   rentcast: RentcastResult | null;
+  richData: ZillowRichData | null;
+  zillowUrl: string;
 }
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -199,8 +203,9 @@ async function fetchViaZillapi(zillowUrl: string): Promise<AnalysisInput> {
 
   const zillapiText = formatZillapiForClaude(json, zillowUrl);
   const listingText = zillapiText + (rentcast ? formatRentcastForClaude(rentcast) : "");
+  const richData = extractRichData(json, zillowUrl);
 
-  return { listingText, rentcast };
+  return { listingText, rentcast, richData, zillowUrl };
 }
 
 async function fetchListingFromUrl(url: string): Promise<AnalysisInput> {
@@ -220,7 +225,7 @@ async function fetchListingFromUrl(url: string): Promise<AnalysisInput> {
   if (text.trim().length < 150) {
     throw new Error("Not enough content at that URL. Try pasting the listing text directly.");
   }
-  return { listingText: `Source URL: ${url}\n\n${text.slice(0, 15000)}`, rentcast: null };
+  return { listingText: `Source URL: ${url}\n\n${text.slice(0, 15000)}`, rentcast: null, richData: null, zillowUrl: "" };
 }
 
 function parseClaudeJson(raw: string): Record<string, unknown> {
@@ -281,9 +286,9 @@ export async function POST(request: NextRequest) {
 
     // If the user pasted a URL, fetch the listing data (+ Rentcast) from it.
     // Otherwise treat the raw text as the listing and skip Rentcast.
-    const { listingText: zillapiText, rentcast } = URL_RE.test(rawInput.trim())
+    const { listingText: zillapiText, rentcast, richData, zillowUrl } = URL_RE.test(rawInput.trim())
       ? await fetchListingFromUrl(rawInput.trim())
-      : { listingText: rawInput, rentcast: null };
+      : { listingText: rawInput, rentcast: null, richData: null, zillowUrl: "" };
 
     // Append MUD tax context when the user provided a rate, then pre-compute
     // all investment metrics so Claude has verified numbers to cite directly.
@@ -317,6 +322,8 @@ export async function POST(request: NextRequest) {
       rentcast_estimate: rentcast?.estimate ?? null,
       rentcast_comps:    rentcast?.comparables ?? null,
       mud_rate:          mudRate,
+      rich_data:         richData ?? null,
+      zillow_url:        zillowUrl || null,
     };
 
     let data: { id: string } | null = null;

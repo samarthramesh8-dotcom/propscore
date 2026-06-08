@@ -128,6 +128,8 @@ MAINTENANCE
     notes: null,
     created_at: "2026-05-22T10:45:00Z",
     updated_at: null,
+    rich_data: null,
+    zillow_url: null,
   },
 
   // ── 2. Brentwood, TN (Nashville metro) — honest PASS on bad math ─────────────
@@ -245,6 +247,8 @@ MAINTENANCE
     notes: null,
     created_at: "2026-05-14T16:30:00Z",
     updated_at: null,
+    rich_data: null,
+    zillow_url: null,
   },
 
   // ── 3. San Antonio, TX — MUD district, military/healthcare value play ────────
@@ -373,5 +377,7 @@ MAINTENANCE
     notes: null,
     created_at: "2026-06-01T09:20:00Z",
     updated_at: null,
+    rich_data: null,
+    zillow_url: null,
   },
 ];

@@ -1,3 +1,7 @@
+import type { ZillowRichData, PropertyPhoto, PriceHistoryEntry, SchoolInfo } from "@/lib/analysis";
+
+export type { ZillowRichData, PropertyPhoto, PriceHistoryEntry, SchoolInfo };
+
 export interface Subscore {
   category: string;
   score: number;
@@ -29,6 +33,8 @@ export interface Property {
   notes: string | null;
   created_at: string;
   updated_at: string | null;
+  rich_data: ZillowRichData | null;
+  zillow_url: string | null;
 }
 
 export interface AnalyzeResponse {
