@@ -1,8 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { Property } from "@/lib/types";
+import { Property, PropertyStatus } from "@/lib/types";
 import ScoreRing from "./ScoreRing";
+import { createClient } from "@/lib/supabase/client";
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function barColor(score: number): string {
   if (score >= 75) return "var(--score-green)";
@@ -10,25 +14,154 @@ function barColor(score: number): string {
   return "var(--score-red)";
 }
 
-/** Days since the property was last analyzed (or created). */
 function daysSince(p: Property): number {
   const ref = p.updated_at ?? p.created_at;
   return Math.floor((Date.now() - new Date(ref).getTime()) / 86_400_000);
 }
 
+// ─── Status badge ─────────────────────────────────────────────────────────────
+
+const STATUS_LABELS: Record<PropertyStatus, string> = {
+  watching:         "Watching",
+  offer_submitted:  "Offer Sent",
+  passed:           "Passed",
+  acquired:         "Acquired",
+};
+
+const STATUS_COLORS: Record<PropertyStatus, { text: string; bg: string; border: string }> = {
+  watching:        { text: "var(--text-muted)",   bg: "transparent",             border: "var(--border-subtle)" },
+  offer_submitted: { text: "var(--score-amber)",   bg: "rgba(245,166,35,0.08)",   border: "rgba(245,166,35,0.25)" },
+  passed:          { text: "var(--score-red)",     bg: "rgba(232,56,79,0.08)",    border: "rgba(232,56,79,0.25)" },
+  acquired:        { text: "var(--score-green)",   bg: "rgba(0,210,106,0.08)",    border: "rgba(0,210,106,0.25)" },
+};
+
+const ALL_STATUSES: PropertyStatus[] = ["watching", "offer_submitted", "passed", "acquired"];
+
+function StatusBadge({
+  status,
+  propertyId,
+  onStatusChange,
+}: {
+  status: PropertyStatus;
+  propertyId: string;
+  onStatusChange?: (id: string, newStatus: PropertyStatus) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const { text, bg, border } = STATUS_COLORS[status];
+
+  async function changeStatus(newStatus: PropertyStatus) {
+    if (newStatus === status) { setOpen(false); return; }
+    setSaving(true);
+    try {
+      const supabase = createClient();
+      await supabase.from("properties").update({ status: newStatus }).eq("id", propertyId);
+      onStatusChange?.(propertyId, newStatus);
+    } finally {
+      setSaving(false);
+      setOpen(false);
+    }
+  }
+
+  return (
+    <div style={{ position: "relative" }}>
+      <button
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!saving) setOpen((o) => !o); }}
+        style={{
+          fontSize: 9,
+          fontWeight: 600,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          color: saving ? "var(--text-muted)" : text,
+          background: bg,
+          border: `1px solid ${border}`,
+          borderRadius: 4,
+          padding: "2px 7px",
+          cursor: saving ? "wait" : "pointer",
+          fontFamily: "inherit",
+          flexShrink: 0,
+          whiteSpace: "nowrap",
+        }}
+      >
+        {STATUS_LABELS[status]}
+      </button>
+
+      {open && (
+        <>
+          <div
+            style={{ position: "fixed", inset: 0, zIndex: 10 }}
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen(false); }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              top: "calc(100% + 4px)",
+              left: 0,
+              zIndex: 20,
+              background: "var(--bg-elevated)",
+              border: "1px solid var(--border-default)",
+              borderRadius: 7,
+              padding: "4px",
+              minWidth: 130,
+              boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {ALL_STATUSES.map((s) => {
+              const c = STATUS_COLORS[s];
+              return (
+                <button
+                  key={s}
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); changeStatus(s); }}
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    textAlign: "left",
+                    padding: "6px 8px",
+                    fontSize: 11,
+                    fontWeight: s === status ? 700 : 500,
+                    color: s === status ? c.text : "var(--text-secondary)",
+                    background: s === status ? c.bg : "transparent",
+                    border: "none",
+                    borderRadius: 4,
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                  }}
+                >
+                  {STATUS_LABELS[s]}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export default function PropertyCard({
-  property,
+  property: initialProperty,
   basePath = "/property",
   onDelete,
   onCompareToggle,
   isCompareSelected = false,
+  onReanalyzed,
+  onStatusChange,
 }: {
   property: Property;
   basePath?: string;
   onDelete?: (id: string) => void;
   onCompareToggle?: (id: string) => void;
   isCompareSelected?: boolean;
+  onReanalyzed?: (id: string, updated: Partial<Property>) => void;
+  onStatusChange?: (id: string, newStatus: PropertyStatus) => void;
 }) {
+  const [property, setProperty] = useState(initialProperty);
+  const [reanalyzing, setReanalyzing] = useState(false);
+  const [scoreDelta, setScoreDelta] = useState<number | null>(null);
+
   const date = new Date(property.created_at).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -40,6 +173,41 @@ export default function PropertyCard({
 
   const hasCompare = !!onCompareToggle;
   const hasDelete  = !!onDelete;
+
+  async function handleReanalyze(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (reanalyzing) return;
+    setReanalyzing(true);
+    try {
+      const input = property.zillow_url || property.listing_text;
+      const res = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          listing_text: input,
+          mud_rate: property.mud_rate,
+          reanalyze_id: property.id,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) return;
+      const delta = data.overall_score - property.overall_score;
+      setScoreDelta(delta);
+      setTimeout(() => setScoreDelta(null), 3000);
+      const updated: Partial<Property> = {
+        overall_score: data.overall_score,
+        subscores: data.subscores,
+        verdict: data.verdict,
+        bull_case: data.bull_case,
+        bear_case: data.bear_case,
+      };
+      setProperty((p) => ({ ...p, ...updated, updated_at: new Date().toISOString() }));
+      onReanalyzed?.(property.id, updated);
+    } finally {
+      setReanalyzing(false);
+    }
+  }
 
   return (
     <div
@@ -142,8 +310,28 @@ export default function PropertyCard({
       >
         <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
           {/* Score ring */}
-          <div style={{ flexShrink: 0 }}>
+          <div style={{ flexShrink: 0, position: "relative" }}>
             <ScoreRing score={property.overall_score} size={64} strokeWidth={6} glow={false} />
+            {scoreDelta !== null && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: -6,
+                  right: -10,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: scoreDelta >= 0 ? "var(--score-green)" : "var(--score-red)",
+                  background: "var(--bg-elevated)",
+                  border: `1px solid ${scoreDelta >= 0 ? "rgba(0,210,106,0.3)" : "rgba(232,56,79,0.3)"}`,
+                  borderRadius: 4,
+                  padding: "1px 4px",
+                  whiteSpace: "nowrap",
+                  fontFamily: "var(--font-dm-mono, monospace)",
+                }}
+              >
+                {scoreDelta > 0 ? `+${scoreDelta}` : scoreDelta} pts
+              </div>
+            )}
           </div>
 
           {/* Content */}
@@ -154,8 +342,9 @@ export default function PropertyCard({
                 display: "flex",
                 alignItems: "center",
                 gap: 8,
-                marginBottom: 12,
+                marginBottom: 8,
                 minWidth: 0,
+                flexWrap: "wrap",
               }}
             >
               <p
@@ -169,14 +358,26 @@ export default function PropertyCard({
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
                   letterSpacing: "-0.01em",
+                  minWidth: 100,
                 }}
               >
                 {property.address}
               </p>
-              {/* Staleness badge */}
+
+              {/* Status badge */}
+              <StatusBadge
+                status={property.status ?? "watching"}
+                propertyId={property.id}
+                onStatusChange={onStatusChange}
+              />
+
+              {/* Stale badge + reanalyze button */}
               {isStale && (
                 <span
                   style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
                     fontSize: 9,
                     fontWeight: 600,
                     letterSpacing: "0.08em",
@@ -191,6 +392,34 @@ export default function PropertyCard({
                   }}
                 >
                   {age}d ago
+                  <button
+                    onClick={handleReanalyze}
+                    disabled={reanalyzing}
+                    style={{
+                      color: age > 90 ? "var(--score-red)" : "var(--score-amber)",
+                      background: "none",
+                      border: "none",
+                      cursor: reanalyzing ? "wait" : "pointer",
+                      fontFamily: "inherit",
+                      fontSize: 9,
+                      fontWeight: 700,
+                      padding: 0,
+                      letterSpacing: "0.08em",
+                      textDecoration: "underline",
+                      textTransform: "uppercase",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 3,
+                    }}
+                  >
+                    {reanalyzing ? (
+                      <svg width="9" height="9" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        style={{ animation: "spin 0.8s linear infinite" }}>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
+                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                    ) : "Refresh"}
+                  </button>
                 </span>
               )}
             </div>
@@ -277,6 +506,9 @@ export default function PropertyCard({
           </div>
         </div>
       </Link>
+
+      {/* Spin keyframe */}
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

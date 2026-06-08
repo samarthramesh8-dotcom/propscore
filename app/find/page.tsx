@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -25,6 +25,12 @@ interface FindResponse {
   error?: string;
 }
 
+interface GeoResult extends FindResult {
+  lat?: number;
+  lon?: number;
+  geocoded?: boolean;
+}
+
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
 const usd = new Intl.NumberFormat("en-US", {
@@ -41,6 +47,21 @@ function scoreColor(score: number): string {
 
 function truncate(str: string, max: number): string {
   return str.length > max ? str.slice(0, max) + "…" : str;
+}
+
+async function geocodeAddress(address: string): Promise<{ lat: number; lon: number } | null> {
+  try {
+    const params = new URLSearchParams({ q: address, format: "json", limit: "1" });
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
+      headers: { "User-Agent": "propscore/1.0" },
+    });
+    if (!res.ok) return null;
+    const results = await res.json();
+    if (!results?.length) return null;
+    return { lat: parseFloat(results[0].lat), lon: parseFloat(results[0].lon) };
+  } catch {
+    return null;
+  }
 }
 
 // ─── Shared input style ───────────────────────────────────────────────────────
@@ -68,6 +89,192 @@ const labelStyle: React.CSSProperties = {
   marginBottom: 6,
 };
 
+// ─── Map view ─────────────────────────────────────────────────────────────────
+
+function MapView({ results }: { results: GeoResult[] }) {
+  const mapRef = useRef<HTMLDivElement>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mapInstance = useRef<any>(null);
+  const [mapError, setMapError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+    if (!token) {
+      setMapError("Mapbox token not configured (NEXT_PUBLIC_MAPBOX_TOKEN).");
+      setLoading(false);
+      return;
+    }
+
+    // Load Mapbox GL JS from CDN
+    const existing = document.getElementById("mapbox-script");
+    const existingCss = document.getElementById("mapbox-css");
+
+    function initMap() {
+      if (!mapRef.current) return;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const mapboxgl = (window as any).mapboxgl;
+      if (!mapboxgl) { setMapError("Mapbox failed to load."); setLoading(false); return; }
+
+      try {
+        mapboxgl.accessToken = token;
+        const geocoded = results.filter((r) => r.lat !== undefined && r.lon !== undefined);
+        const center: [number, number] =
+          geocoded.length > 0
+            ? [geocoded[0].lon!, geocoded[0].lat!]
+            : [-98.5795, 39.8283]; // center of US
+
+        const map = new mapboxgl.Map({
+          container: mapRef.current,
+          style: "mapbox://styles/mapbox/dark-v11",
+          center,
+          zoom: geocoded.length > 0 ? 11 : 4,
+        });
+        mapInstance.current = map;
+
+        map.on("load", () => {
+          setLoading(false);
+
+          geocoded.forEach((r) => {
+            const color =
+              r.overall_score >= 75 ? "#00D26A" : r.overall_score >= 50 ? "#F5A623" : "#E8384F";
+
+            // Custom marker
+            const el = document.createElement("div");
+            el.style.cssText = `
+              width:36px;height:36px;border-radius:50%;
+              background:${color};border:2.5px solid #0A0A0F;
+              display:flex;align-items:center;justify-content:center;
+              font-family:var(--font-dm-mono,monospace);font-size:11px;font-weight:700;
+              color:#0A0A0F;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,0.5);
+            `;
+            el.textContent = String(r.overall_score);
+
+            const cfLine =
+              r.monthly_cash_flow !== null
+                ? `<div style="font-size:11px;color:${r.monthly_cash_flow >= 0 ? "#00D26A" : "#E8384F"};margin-top:4px">
+                    ${r.monthly_cash_flow >= 0 ? "+" : ""}${usd.format(r.monthly_cash_flow)}/mo
+                   </div>`
+                : "";
+
+            const popup = new mapboxgl.Popup({ offset: 20, maxWidth: "240px" }).setHTML(`
+              <div style="background:#111118;border-radius:8px;padding:12px;font-family:inherit;color:#F0F0FF;">
+                <div style="font-size:11px;font-weight:600;margin-bottom:6px;line-height:1.4;">${r.address}</div>
+                <div style="display:flex;gap:10px;align-items:center;margin-bottom:6px;">
+                  <span style="font-size:18px;font-weight:700;color:${color}">${r.overall_score}</span>
+                  <span style="font-size:10px;color:#7A7A9A;text-transform:uppercase;letter-spacing:0.08em">${
+                    r.overall_score >= 70 ? "Strong Buy" : r.overall_score >= 50 ? "Conditional" : "Pass"
+                  }</span>
+                </div>
+                ${cfLine}
+                <a href="/property/${r.property_id}" style="display:inline-block;margin-top:8px;font-size:11px;font-weight:600;color:#5B5BD6;text-decoration:none;">
+                  View Analysis →
+                </a>
+              </div>
+            `);
+
+            new mapboxgl.Marker({ element: el })
+              .setLngLat([r.lon!, r.lat!])
+              .setPopup(popup)
+              .addTo(map);
+          });
+
+          // Fit bounds to all markers
+          if (geocoded.length > 1) {
+            const bounds = new mapboxgl.LngLatBounds();
+            geocoded.forEach((r) => bounds.extend([r.lon!, r.lat!]));
+            map.fitBounds(bounds, { padding: 60, maxZoom: 14 });
+          }
+        });
+
+        map.on("error", () => {
+          setMapError("Map failed to render. Check your Mapbox token.");
+          setLoading(false);
+        });
+      } catch {
+        setMapError("Failed to initialize map.");
+        setLoading(false);
+      }
+    }
+
+    if (!existing) {
+      const css = document.createElement("link");
+      css.id = "mapbox-css";
+      css.rel = "stylesheet";
+      css.href = "https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css";
+      document.head.appendChild(css);
+
+      const script = document.createElement("script");
+      script.id = "mapbox-script";
+      script.src = "https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js";
+      script.onload = initMap;
+      script.onerror = () => { setMapError("Failed to load Mapbox."); setLoading(false); };
+      document.head.appendChild(script);
+    } else {
+      // Already loaded
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if ((window as any).mapboxgl) {
+        initMap();
+      } else {
+        existing.addEventListener("load", initMap);
+      }
+    }
+
+    return () => {
+      mapInstance.current?.remove();
+      mapInstance.current = null;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (mapError) {
+    return (
+      <div
+        style={{
+          height: 480,
+          background: "var(--bg-surface)",
+          border: "1px solid var(--border-subtle)",
+          borderRadius: 10,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
+        }}
+      >
+        <p style={{ fontSize: 12, color: "var(--score-red)" }}>{mapError}</p>
+        <p style={{ fontSize: 11, color: "var(--text-muted)" }}>
+          Showing list view instead.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ position: "relative", height: 480, borderRadius: 10, overflow: "hidden", border: "1px solid var(--border-subtle)" }}>
+      {loading && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "var(--bg-surface)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1,
+          }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth={2}
+            style={{ animation: "spin 0.8s linear infinite" }}>
+            <path strokeLinecap="round" d="M12 2a10 10 0 0 1 10 10" />
+          </svg>
+        </div>
+      )}
+      <div ref={mapRef} style={{ width: "100%", height: "100%" }} />
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function FindPage() {
@@ -83,6 +290,11 @@ export default function FindPage() {
   const [loading,   setLoading]   = useState(false);
   const [response,  setResponse]  = useState<FindResponse | null>(null);
   const [error,     setError]     = useState<string | null>(null);
+  const [viewMode,  setViewMode]  = useState<"list" | "map">("list");
+
+  // Geocoded results for map
+  const [geoResults, setGeoResults] = useState<GeoResult[]>([]);
+  const [geocoding,  setGeocoding]  = useState(false);
 
   // Compare selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -156,6 +368,8 @@ export default function FindPage() {
     setError(null);
     setResponse(null);
     setSelectedIds(new Set());
+    setGeoResults([]);
+    setViewMode("list");
 
     try {
       const res = await fetch("/api/find", {
@@ -177,12 +391,34 @@ export default function FindPage() {
         setError(data.error ?? `Server error ${res.status}`);
       } else {
         setResponse(data);
+        setGeoResults(data.results.map((r) => ({ ...r })));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error — please try again.");
     } finally {
       setLoading(false);
     }
+  }
+
+  // Geocode results when switching to map view
+  async function handleMapToggle() {
+    if (viewMode === "map") { setViewMode("list"); return; }
+    setViewMode("map");
+
+    const toGeocode = geoResults.filter((r) => !r.geocoded);
+    if (toGeocode.length === 0) return;
+
+    setGeocoding(true);
+    const updated = [...geoResults];
+    for (const r of toGeocode) {
+      const coords = await geocodeAddress(r.address);
+      const idx = updated.findIndex((u) => u.property_id === r.property_id);
+      if (idx >= 0) {
+        updated[idx] = { ...updated[idx], geocoded: true, ...(coords ?? {}) };
+      }
+    }
+    setGeoResults(updated);
+    setGeocoding(false);
   }
 
   const results = response?.results ?? [];
@@ -240,7 +476,6 @@ export default function FindPage() {
           gap: 12,
           marginBottom: 20,
         }}>
-          {/* Status */}
           <div>
             <label style={labelStyle}>Status</label>
             <select value={status} onChange={(e) => setStatus(e.target.value)} style={inputStyle}>
@@ -249,7 +484,6 @@ export default function FindPage() {
             </select>
           </div>
 
-          {/* Max price */}
           <div>
             <label style={labelStyle}>Max Price</label>
             <div style={{ position: "relative" }}>
@@ -268,7 +502,6 @@ export default function FindPage() {
             </div>
           </div>
 
-          {/* Min beds */}
           <div>
             <label style={labelStyle}>Min Beds</label>
             <select value={minBeds} onChange={(e) => setMinBeds(e.target.value)} style={inputStyle}>
@@ -280,7 +513,6 @@ export default function FindPage() {
             </select>
           </div>
 
-          {/* Min baths */}
           <div>
             <label style={labelStyle}>Min Baths</label>
             <select value={minBaths} onChange={(e) => setMinBaths(e.target.value)} style={inputStyle}>
@@ -291,7 +523,6 @@ export default function FindPage() {
             </select>
           </div>
 
-          {/* Max results */}
           <div>
             <label style={labelStyle}>Max Results</label>
             <select value={maxResults} onChange={(e) => setMaxResults(e.target.value)} style={inputStyle}>
@@ -357,7 +588,6 @@ export default function FindPage() {
         </div>
       )}
 
-      {/* ── "No listings found" message ──────────────────────────────────── */}
       {response?.message && results.length === 0 && (
         <div style={{
           background: "var(--bg-surface)",
@@ -371,7 +601,6 @@ export default function FindPage() {
         </div>
       )}
 
-      {/* ── "All analyses failed" message ────────────────────────────────── */}
       {response && response.total_analyzed === 0 && response.total_found > 0 && (
         <div style={{
           background: "rgba(232,56,79,0.08)",
@@ -386,7 +615,6 @@ export default function FindPage() {
         </div>
       )}
 
-      {/* ── Partial failure banner ────────────────────────────────────────── */}
       {hasPartialFailure && (
         <div style={{
           background: "rgba(245,166,35,0.08)",
@@ -402,16 +630,60 @@ export default function FindPage() {
         </div>
       )}
 
-      {/* ── Results table ─────────────────────────────────────────────────── */}
+      {/* ── Results ───────────────────────────────────────────────────────── */}
       {results.length > 0 && (
         <div style={{ marginBottom: 16 }}>
-          {/* Summary row */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          {/* Summary row + view toggle */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
             <p style={{ fontSize: 11, color: "var(--text-muted)" }}>
               {response!.total_analyzed} of {response!.total_found} properties analyzed
               {response!.errors > 0 && ` · ${response!.errors} failed`}
             </p>
-            <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {/* Map / List toggle */}
+              <div
+                style={{
+                  display: "flex",
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: 6,
+                  overflow: "hidden",
+                }}
+              >
+                {(["list", "map"] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={mode === "map" ? handleMapToggle : () => setViewMode("list")}
+                    style={{
+                      height: 30,
+                      padding: "0 12px",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      border: "none",
+                      background: viewMode === mode ? "rgba(91,91,214,0.15)" : "transparent",
+                      color: viewMode === mode ? "var(--accent)" : "var(--text-muted)",
+                      fontFamily: "inherit",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 5,
+                      transition: "background 0.1s, color 0.1s",
+                    }}
+                  >
+                    {mode === "list" ? (
+                      <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h10" />
+                      </svg>
+                    ) : (
+                      <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                      </svg>
+                    )}
+                    {mode === "list" ? "List" : geocoding ? "Loading…" : "Map"}
+                  </button>
+                ))}
+              </div>
+
               <button
                 onClick={openSaveModal}
                 style={{
@@ -462,135 +734,125 @@ export default function FindPage() {
                   gap: 6,
                 }}
               >
-                <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M4 6h16M4 10h16M4 14h10" />
-                </svg>
                 View in portfolio
               </Link>
             </div>
           </div>
 
-          {/* Table container */}
-          <div style={{
-            background: "var(--bg-surface)",
-            border: "1px solid var(--border-subtle)",
-            borderRadius: 10,
-            overflow: "hidden",
-          }}>
-            {/* Header */}
+          {/* Map view */}
+          {viewMode === "map" && (
+            <MapView results={geoResults} />
+          )}
+
+          {/* List view */}
+          {viewMode === "list" && (
             <div style={{
-              display: "grid",
-              gridTemplateColumns: "minmax(140px, 2fr) 56px 100px 76px 108px minmax(120px, 1fr) 130px",
-              padding: "10px 16px",
-              background: "var(--bg-elevated)",
-              borderBottom: "1px solid var(--border-subtle)",
-              gap: 12,
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-subtle)",
+              borderRadius: 10,
+              overflow: "hidden",
             }}>
-              {["Address", "Score", "List Price", "Cap Rate", "Cash Flow/mo", "Verdict", "Actions"].map((h) => (
-                <span key={h} style={{
-                  fontSize: 9, fontWeight: 600, letterSpacing: "0.12em",
-                  textTransform: "uppercase", color: "var(--text-muted)",
-                }}>
-                  {h}
-                </span>
+              {/* Header */}
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "minmax(140px, 2fr) 56px 100px 76px 108px minmax(120px, 1fr) 130px",
+                padding: "10px 16px",
+                background: "var(--bg-elevated)",
+                borderBottom: "1px solid var(--border-subtle)",
+                gap: 12,
+              }}>
+                {["Address", "Score", "List Price", "Cap Rate", "Cash Flow/mo", "Verdict", "Actions"].map((h) => (
+                  <span key={h} style={{
+                    fontSize: 9, fontWeight: 600, letterSpacing: "0.12em",
+                    textTransform: "uppercase", color: "var(--text-muted)",
+                  }}>
+                    {h}
+                  </span>
+                ))}
+              </div>
+
+              {/* Rows */}
+              {results.map((r, i) => (
+                <div
+                  key={r.property_id}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "minmax(140px, 2fr) 56px 100px 76px 108px minmax(120px, 1fr) 130px",
+                    padding: "13px 16px",
+                    gap: 12,
+                    alignItems: "center",
+                    borderBottom: i < results.length - 1 ? "1px solid var(--border-subtle)" : "none",
+                    background: selectedIds.has(r.property_id) ? "rgba(91,91,214,0.05)" : "transparent",
+                    transition: "background 0.1s ease",
+                  }}
+                >
+                  <span style={{ fontSize: 12, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {r.address}
+                  </span>
+                  <span className="font-mono" style={{
+                    fontSize: 14, fontWeight: 700,
+                    color: scoreColor(r.overall_score),
+                    letterSpacing: "-0.01em",
+                  }}>
+                    {r.overall_score}
+                  </span>
+                  <span className="font-mono" style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 600 }}>
+                    {r.list_price ? usd.format(r.list_price) : "—"}
+                  </span>
+                  <span className="font-mono" style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+                    {r.cap_rate ? `${r.cap_rate}%` : "—"}
+                  </span>
+                  <span className="font-mono" style={{
+                    fontSize: 12,
+                    color: r.monthly_cash_flow === null ? "var(--text-muted)"
+                      : r.monthly_cash_flow >= 0 ? "#00D26A" : "#E8384F",
+                    fontWeight: 600,
+                  }}>
+                    {r.monthly_cash_flow === null
+                      ? "—"
+                      : (r.monthly_cash_flow >= 0 ? "+" : "") + usd.format(r.monthly_cash_flow) + "/mo"}
+                  </span>
+                  <span style={{
+                    fontSize: 11, color: "var(--text-secondary)",
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }} title={r.verdict}>
+                    {truncate(r.verdict, 80)}
+                  </span>
+                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                    <Link
+                      href={`/property/${r.property_id}`}
+                      style={{
+                        height: 26, padding: "0 10px",
+                        background: "rgba(91,91,214,0.10)",
+                        border: "1px solid rgba(91,91,214,0.25)",
+                        borderRadius: 5, fontSize: 11, fontWeight: 600,
+                        color: "var(--accent)", textDecoration: "none",
+                        display: "inline-flex", alignItems: "center",
+                      }}
+                    >
+                      View
+                    </Link>
+                    <button
+                      onClick={() => toggleCompare(r.property_id)}
+                      style={{
+                        height: 26, padding: "0 10px",
+                        background: selectedIds.has(r.property_id)
+                          ? "rgba(91,91,214,0.18)"
+                          : "transparent",
+                        border: `1px solid ${selectedIds.has(r.property_id) ? "var(--accent)" : "var(--border-subtle)"}`,
+                        borderRadius: 5, fontSize: 11, fontWeight: 600,
+                        color: selectedIds.has(r.property_id) ? "var(--accent)" : "var(--text-muted)",
+                        cursor: "pointer", fontFamily: "inherit",
+                        transition: "all 0.1s ease",
+                      }}
+                    >
+                      {selectedIds.has(r.property_id) ? "✓ Compare" : "Compare"}
+                    </button>
+                  </div>
+                </div>
               ))}
             </div>
-
-            {/* Rows */}
-            {results.map((r, i) => (
-              <div
-                key={r.property_id}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "minmax(140px, 2fr) 56px 100px 76px 108px minmax(120px, 1fr) 130px",
-                  padding: "13px 16px",
-                  gap: 12,
-                  alignItems: "center",
-                  borderBottom: i < results.length - 1 ? "1px solid var(--border-subtle)" : "none",
-                  background: selectedIds.has(r.property_id) ? "rgba(91,91,214,0.05)" : "transparent",
-                  transition: "background 0.1s ease",
-                }}
-              >
-                {/* Address */}
-                <span style={{ fontSize: 12, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {r.address}
-                </span>
-
-                {/* Score */}
-                <span className="font-mono" style={{
-                  fontSize: 14, fontWeight: 700,
-                  color: scoreColor(r.overall_score),
-                  letterSpacing: "-0.01em",
-                }}>
-                  {r.overall_score}
-                </span>
-
-                {/* List price */}
-                <span className="font-mono" style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 600 }}>
-                  {r.list_price ? usd.format(r.list_price) : "—"}
-                </span>
-
-                {/* Cap rate */}
-                <span className="font-mono" style={{ fontSize: 12, color: "var(--text-secondary)" }}>
-                  {r.cap_rate ? `${r.cap_rate}%` : "—"}
-                </span>
-
-                {/* Cash flow */}
-                <span className="font-mono" style={{
-                  fontSize: 12,
-                  color: r.monthly_cash_flow === null ? "var(--text-muted)"
-                    : r.monthly_cash_flow >= 0 ? "#00D26A" : "#E8384F",
-                  fontWeight: 600,
-                }}>
-                  {r.monthly_cash_flow === null
-                    ? "—"
-                    : (r.monthly_cash_flow >= 0 ? "+" : "") + usd.format(r.monthly_cash_flow) + "/mo"}
-                </span>
-
-                {/* Verdict */}
-                <span style={{
-                  fontSize: 11, color: "var(--text-secondary)",
-                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                }} title={r.verdict}>
-                  {truncate(r.verdict, 80)}
-                </span>
-
-                {/* Actions */}
-                <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                  <Link
-                    href={`/property/${r.property_id}`}
-                    style={{
-                      height: 26, padding: "0 10px",
-                      background: "rgba(91,91,214,0.10)",
-                      border: "1px solid rgba(91,91,214,0.25)",
-                      borderRadius: 5, fontSize: 11, fontWeight: 600,
-                      color: "var(--accent)", textDecoration: "none",
-                      display: "inline-flex", alignItems: "center",
-                    }}
-                  >
-                    View
-                  </Link>
-                  <button
-                    onClick={() => toggleCompare(r.property_id)}
-                    style={{
-                      height: 26, padding: "0 10px",
-                      background: selectedIds.has(r.property_id)
-                        ? "rgba(91,91,214,0.18)"
-                        : "transparent",
-                      border: `1px solid ${selectedIds.has(r.property_id) ? "var(--accent)" : "var(--border-subtle)"}`,
-                      borderRadius: 5, fontSize: 11, fontWeight: 600,
-                      color: selectedIds.has(r.property_id) ? "var(--accent)" : "var(--text-muted)",
-                      cursor: "pointer", fontFamily: "inherit",
-                      transition: "all 0.1s ease",
-                    }}
-                  >
-                    {selectedIds.has(r.property_id) ? "✓ Compare" : "Compare"}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+          )}
         </div>
       )}
 
@@ -724,7 +986,6 @@ export default function FindPage() {
         </div>
       )}
 
-      {/* ── Spinner keyframes ─────────────────────────────────────────────── */}
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );

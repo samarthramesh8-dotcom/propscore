@@ -1,3 +1,10 @@
+// Migration required for Property Status Tags (feature #5):
+// Run this in your Supabase SQL editor to enable status tracking:
+//
+//   alter table properties
+//     add column if not exists status text not null default 'watching'
+//     check (status in ('watching', 'offer_submitted', 'passed', 'acquired'));
+//
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";

@@ -17,6 +17,8 @@ export interface RentcastComp {
   distanceMi: number;
 }
 
+export type PropertyStatus = "watching" | "offer_submitted" | "passed" | "acquired";
+
 export interface Property {
   id: string;
   user_id: string;
@@ -35,6 +37,7 @@ export interface Property {
   updated_at: string | null;
   rich_data: ZillowRichData | null;
   zillow_url: string | null;
+  status?: PropertyStatus;
 }
 
 export interface AnalyzeResponse {

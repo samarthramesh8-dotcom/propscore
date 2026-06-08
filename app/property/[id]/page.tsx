@@ -15,6 +15,7 @@ import PriceHistory from "@/components/PriceHistory";
 import SchoolsDisplay from "@/components/SchoolsDisplay";
 import PropertyFacts from "@/components/PropertyFacts";
 import ListingDataSection from "@/components/ListingDataSection";
+import FinancingCalculator from "@/components/FinancingCalculator";
 import { Property } from "@/lib/types";
 
 export default async function PropertyPage({
@@ -216,7 +217,18 @@ export default async function PropertyPage({
             </div>
           </div>
 
-          {/* 7. Cash flow */}
+          {/* 7. Financing calculator */}
+          <div>
+            <p style={labelStyle}>Financing</p>
+            <FinancingCalculator
+              listingText={property.listing_text}
+              rentcastEstimate={property.rentcast_estimate}
+              monthlyHoaFee={property.rich_data?.monthlyHoaFee ?? null}
+              mudRate={property.mud_rate}
+            />
+          </div>
+
+          {/* 8. Cash flow */}
           <div>
             <p style={labelStyle}>Cash Flow Projection</p>
             <CashFlowChart
@@ -266,11 +278,11 @@ export default async function PropertyPage({
             </div>
           )}
 
-          {/* 9. Price history */}
-          {property.rich_data?.priceHistory && property.rich_data.priceHistory.length > 0 && (
+          {/* 9. Price history — always shown when rich_data available */}
+          {property.rich_data && (
             <div>
               <p style={labelStyle}>Price history</p>
-              <PriceHistory history={property.rich_data.priceHistory} />
+              <PriceHistory history={property.rich_data.priceHistory ?? []} />
             </div>
           )}
 
