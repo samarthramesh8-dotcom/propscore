@@ -14,7 +14,7 @@ import ListingDescription from "@/components/ListingDescription";
 import PriceHistory from "@/components/PriceHistory";
 import SchoolsDisplay from "@/components/SchoolsDisplay";
 import PropertyFacts from "@/components/PropertyFacts";
-import CollapsibleSource from "@/components/CollapsibleSource";
+import ListingDataSection from "@/components/ListingDataSection";
 import { Property } from "@/lib/types";
 
 export default async function PropertyPage({
@@ -101,7 +101,7 @@ export default async function PropertyPage({
             mudRate={property.mud_rate}
             isStale={isStale}
             staleDays={daysSince}
-            hasRichData={property.rich_data !== null}
+            hasRichData={!!property.rich_data}
           />
 
           {property.zillow_url && (
@@ -300,8 +300,8 @@ export default async function PropertyPage({
             </div>
           </div>
 
-          {/* 11. Source data (collapsible) */}
-          <CollapsibleSource listingText={property.listing_text} />
+          {/* 11. Analysis data */}
+          <ListingDataSection listingText={property.listing_text} />
 
           {/* 12. Notes */}
           <NotesField propertyId={property.id} initialNotes={property.notes} />

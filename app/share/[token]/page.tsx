@@ -11,6 +11,7 @@ import ListingDescription from "@/components/ListingDescription";
 import PriceHistory from "@/components/PriceHistory";
 import SchoolsDisplay from "@/components/SchoolsDisplay";
 import PropertyFacts from "@/components/PropertyFacts";
+import ListingDataSection from "@/components/ListingDataSection";
 import { Property } from "@/lib/types";
 
 function barColor(score: number): string {
@@ -279,6 +280,9 @@ export default async function SharePage({
               </div>
             ))}
           </div>
+
+          {/* ── Analysis data ────────────────────────────────── */}
+          <ListingDataSection listingText={property.listing_text} />
 
           {/* ── CTA footer ───────────────────────────────────── */}
           <div

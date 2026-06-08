@@ -9,7 +9,7 @@ import ListingDescription from "@/components/ListingDescription";
 import PriceHistory from "@/components/PriceHistory";
 import SchoolsDisplay from "@/components/SchoolsDisplay";
 import PropertyFacts from "@/components/PropertyFacts";
-import CollapsibleSource from "@/components/CollapsibleSource";
+import ListingDataSection from "@/components/ListingDataSection";
 import { MOCK_PROPERTIES } from "@/lib/mock-data";
 
 export default async function DemoPropertyPage({
@@ -292,8 +292,8 @@ export default async function DemoPropertyPage({
             </div>
           </div>
 
-          {/* 11. Source data (collapsible) */}
-          <CollapsibleSource listingText={property.listing_text} />
+          {/* 11. Analysis data */}
+          <ListingDataSection listingText={property.listing_text} />
 
           {/* ── CTA ──────────────────────────────────────────── */}
           <div
