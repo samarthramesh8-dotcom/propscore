@@ -40,8 +40,12 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (error) {
-      // Code is invalid or expired — send back to forgot-password with a message.
-      return NextResponse.redirect(`${origin}/forgot-password?error=expired`);
+      // Code is invalid or expired. For OAuth (Google) failures redirect to login;
+      // for email recovery flows redirect to forgot-password.
+      if (isRecovery) {
+        return NextResponse.redirect(`${origin}/forgot-password?error=expired`);
+      }
+      return NextResponse.redirect(`${origin}/login?error=auth`);
     }
   }
 

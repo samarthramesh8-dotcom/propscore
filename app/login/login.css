@@ -277,3 +277,23 @@
 .psl-guest-btn:active { transform: scale(.98) translateY(0); transition-duration: .08s; }
 .psl-guest-arrow { opacity: .7; transition: transform .2s ease, opacity .15s ease; }
 .psl-guest-btn:hover .psl-guest-arrow { transform: translateX(3px); opacity: 1; }
+
+/* ── Google OAuth button ── */
+.psl-google-btn {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; margin-bottom: 4px;
+  padding: 12px 0; border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.04);
+  color: #E8E8F4; font-size: 13.5px; font-weight: 600;
+  letter-spacing: .02em; font-family: inherit;
+  cursor: pointer;
+  transition: border-color .2s ease, background .2s ease, transform .18s ease;
+}
+.psl-google-btn:hover:not(:disabled) {
+  border-color: rgba(255,255,255,.22);
+  background: rgba(255,255,255,.08);
+  transform: translateY(-1px);
+}
+.psl-google-btn:active:not(:disabled) { transform: scale(.98) translateY(0); }
+.psl-google-btn:disabled { opacity: .55; cursor: not-allowed; }
