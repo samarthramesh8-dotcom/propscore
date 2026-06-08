@@ -4,6 +4,12 @@ import Sidebar from "@/components/Sidebar";
 import ScoreRing from "@/components/ScoreRing";
 import SubscoreCard from "@/components/SubscoreCard";
 import CashFlowChart from "@/components/CashFlowChart";
+import PhotoGallery from "@/components/PhotoGallery";
+import ListingDescription from "@/components/ListingDescription";
+import PriceHistory from "@/components/PriceHistory";
+import SchoolsDisplay from "@/components/SchoolsDisplay";
+import PropertyFacts from "@/components/PropertyFacts";
+import CollapsibleSource from "@/components/CollapsibleSource";
 import { MOCK_PROPERTIES } from "@/lib/mock-data";
 
 export default async function DemoPropertyPage({
@@ -19,6 +25,11 @@ export default async function DemoPropertyPage({
     month: "short", day: "numeric", year: "numeric",
   });
 
+  const labelStyle = {
+    fontSize: 9, fontWeight: 600, letterSpacing: "0.14em",
+    textTransform: "uppercase" as const, color: "var(--text-muted)", marginBottom: 12,
+  };
+
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg-base)" }}>
       <Sidebar />
@@ -28,13 +39,9 @@ export default async function DemoPropertyPage({
         {/* ── Guest banner ────────────────────────────────────── */}
         <div
           style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-            padding: "10px 20px",
-            background: "rgba(91,91,214,0.08)",
-            borderBottom: "1px solid rgba(91,91,214,0.2)",
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            gap: 12, padding: "10px 20px",
+            background: "rgba(91,91,214,0.08)", borderBottom: "1px solid rgba(91,91,214,0.2)",
             flexWrap: "wrap",
           }}
         >
@@ -93,6 +100,28 @@ export default async function DemoPropertyPage({
               {property.address}
             </h1>
           </div>
+
+          {property.zillow_url && (
+            <a
+              href={property.zillow_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ps-zillow-link"
+              style={{
+                display: "flex", alignItems: "center", gap: 5,
+                height: 28, padding: "0 10px", borderRadius: 6,
+                fontSize: 11, fontWeight: 600,
+                background: "transparent", textDecoration: "none", flexShrink: 0,
+              }}
+            >
+              <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+              <span className="ps-topbar-btn-label">Zillow</span>
+            </a>
+          )}
+
           <span
             className="font-mono"
             style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}
@@ -103,7 +132,17 @@ export default async function DemoPropertyPage({
 
         <div className="ps-property-content" style={{ padding: "28px 28px", display: "flex", flexDirection: "column", gap: 24 }}>
 
-          {/* ── Hero ─────────────────────────────────────────── */}
+          {/* 1. Photo gallery */}
+          {property.rich_data?.photos && property.rich_data.photos.length > 0 && (
+            <div className="ps-gallery-breakout">
+              <PhotoGallery
+                photos={property.rich_data.photos}
+                address={property.address}
+              />
+            </div>
+          )}
+
+          {/* 2. Hero */}
           <div
             className="ps-hero-layout"
             style={{
@@ -131,11 +170,37 @@ export default async function DemoPropertyPage({
             </div>
           </div>
 
-          {/* ── Subscores ────────────────────────────────────── */}
+          {/* 3. Description */}
+          {property.rich_data?.description && (
+            <div>
+              <p style={labelStyle}>Description</p>
+              <ListingDescription description={property.rich_data.description} />
+            </div>
+          )}
+
+          {/* 4. Property facts */}
+          {property.rich_data && (
+            <div>
+              <p style={labelStyle}>Property details</p>
+              <PropertyFacts
+                richData={property.rich_data}
+                listingText={property.listing_text}
+                mudRate={property.mud_rate}
+              />
+            </div>
+          )}
+
+          {/* 5. Schools */}
+          {property.rich_data?.schools && property.rich_data.schools.length > 0 && (
+            <div>
+              <p style={labelStyle}>Assigned schools</p>
+              <SchoolsDisplay schools={property.rich_data.schools} />
+            </div>
+          )}
+
+          {/* 6. Subscores */}
           <div>
-            <p style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 12 }}>
-              Category breakdown
-            </p>
+            <p style={labelStyle}>Category breakdown</p>
             <div className="ps-grid-2col" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
               {property.subscores.map((s) => (
                 <SubscoreCard key={s.category} category={s.category} score={s.score} summary={s.summary} />
@@ -143,11 +208,9 @@ export default async function DemoPropertyPage({
             </div>
           </div>
 
-          {/* ── Cash flow ────────────────────────────────────── */}
+          {/* 7. Cash flow */}
           <div>
-            <p style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 12 }}>
-              Cash Flow Projection
-            </p>
+            <p style={labelStyle}>Cash Flow Projection</p>
             <CashFlowChart
               listingText={property.listing_text}
               rentcastEstimate={property.rentcast_estimate}
@@ -155,7 +218,7 @@ export default async function DemoPropertyPage({
             />
           </div>
 
-          {/* ── Comparable rentals ───────────────────────────── */}
+          {/* 8. Comparable rentals */}
           {property.rentcast_comps && property.rentcast_comps.length > 0 && (
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
@@ -195,7 +258,15 @@ export default async function DemoPropertyPage({
             </div>
           )}
 
-          {/* ── Bull / Bear ───────────────────────────────────── */}
+          {/* 9. Price history */}
+          {property.rich_data?.priceHistory && property.rich_data.priceHistory.length > 0 && (
+            <div>
+              <p style={labelStyle}>Price history</p>
+              <PriceHistory history={property.rich_data.priceHistory} />
+            </div>
+          )}
+
+          {/* 10. Bull / Bear */}
           <div className="ps-grid-2col" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
             <div style={{ background: "rgba(0,210,106,0.04)", border: "1px solid rgba(0,210,106,0.15)", borderRadius: 10, padding: "18px 18px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
@@ -221,12 +292,16 @@ export default async function DemoPropertyPage({
             </div>
           </div>
 
+          {/* 11. Source data (collapsible) */}
+          <CollapsibleSource listingText={property.listing_text} />
+
           {/* ── CTA ──────────────────────────────────────────── */}
           <div
             style={{
               background: "rgba(91,91,214,0.06)", border: "1px solid rgba(91,91,214,0.18)",
               borderRadius: 10, padding: "20px 24px",
-              display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap",
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              gap: 16, flexWrap: "wrap",
             }}
           >
             <div>
@@ -245,7 +320,6 @@ export default async function DemoPropertyPage({
                 background: "var(--accent)", color: "#fff",
                 fontSize: 13, fontWeight: 700, textDecoration: "none",
                 flexShrink: 0, letterSpacing: "-0.01em",
-                transition: "background 0.15s ease",
               }}
             >
               Create free account →

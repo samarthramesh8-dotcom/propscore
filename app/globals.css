@@ -247,6 +247,23 @@ body {
   .ps-grid-3col { grid-template-columns: 1fr; }
 }
 
+/* ─── Gallery breakout (full-bleed from padded content) ─────── */
+.ps-gallery-breakout { margin: 0 -28px; }
+@media (max-width: 767px) {
+  .ps-gallery-breakout { margin: 0 -16px; }
+}
+
+/* ─── Zillow external link button ────────────────────────────── */
+.ps-zillow-link {
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.ps-zillow-link:hover {
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
 /* ─── Responsive ─────────────────────────────────────────── */
 
 /* Desktop: sidebar shows as column; bottom nav is hidden */
