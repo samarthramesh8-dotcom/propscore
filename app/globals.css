@@ -253,6 +253,12 @@ body {
   .ps-gallery-breakout { margin: 0 -16px; }
 }
 
+/* ─── Spinner (used in Fetch photos button) ──────────────────── */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
 /* ─── Zillow external link button ────────────────────────────── */
 .ps-zillow-link {
   border: 1px solid var(--border-subtle);

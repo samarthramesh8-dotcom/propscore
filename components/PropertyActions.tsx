@@ -10,6 +10,7 @@ interface Props {
   mudRate: number | null;
   isStale: boolean;
   staleDays: number;
+  hasRichData?: boolean;
 }
 
 export default function PropertyActions({
@@ -18,9 +19,11 @@ export default function PropertyActions({
   mudRate,
   isStale,
   staleDays,
+  hasRichData = true,
 }: Props) {
   const [reanalyzeOpen, setReanalyzeOpen] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [fetching, setFetching] = useState(false);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
 
   function showToast(msg: string, ok = true) {
@@ -48,6 +51,29 @@ export default function PropertyActions({
       setSharing(false);
     }
   }
+
+  async function handleFetchData() {
+    if (fetching) return;
+    setFetching(true);
+    try {
+      const res = await fetch("/api/fetch-rich-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ property_id: propertyId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to fetch data");
+      const count: number = json.photoCount ?? 0;
+      showToast(count > 0 ? `${count} photos loaded!` : "Details loaded!");
+      setTimeout(() => window.location.reload(), 900);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to fetch data", false);
+    } finally {
+      setFetching(false);
+    }
+  }
+
+  const needsFetch = !hasRichData && listingText.toLowerCase().includes("zillow.com");
 
   return (
     <>
@@ -91,6 +117,41 @@ export default function PropertyActions({
             Re-analyze
           </button>
         </span>
+      )}
+
+      {/* Fetch photos & data button — shown for Zillow properties without rich data */}
+      {needsFetch && (
+        <button
+          onClick={handleFetchData}
+          disabled={fetching}
+          className="ps-topbar-btn"
+          style={{
+            display: "flex", alignItems: "center", gap: 5,
+            height: 28, padding: "0 10px", borderRadius: 6,
+            fontSize: 11, fontWeight: 600,
+            border: "1px solid rgba(91,91,214,0.4)",
+            background: "rgba(91,91,214,0.08)",
+            color: fetching ? "var(--text-muted)" : "var(--accent)",
+            cursor: fetching ? "wait" : "pointer",
+            fontFamily: "inherit", flexShrink: 0,
+            transition: "border-color 0.15s ease, color 0.15s ease, opacity 0.15s ease",
+            opacity: fetching ? 0.6 : 1,
+          }}
+        >
+          {fetching ? (
+            <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              style={{ animation: "spin 0.8s linear infinite" }}>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          ) : (
+            <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          )}
+          <span className="ps-topbar-btn-label">{fetching ? "Fetching…" : "Fetch photos"}</span>
+        </button>
       )}
 
       {/* Re-analyze button */}

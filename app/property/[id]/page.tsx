@@ -101,6 +101,7 @@ export default async function PropertyPage({
             mudRate={property.mud_rate}
             isStale={isStale}
             staleDays={daysSince}
+            hasRichData={property.rich_data !== null}
           />
 
           {property.zillow_url && (
