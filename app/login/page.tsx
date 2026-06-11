@@ -165,7 +165,10 @@ export default function LoginPage() {
   useEffect(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
-      if (params.get("error") === "auth") setError("Authentication failed. Please try again.");
+      if (params.get("error") === "auth") {
+        const desc = params.get("error_description");
+        setError(desc ? `Google sign-in failed: ${desc}` : "Google sign-in failed. Please try again.");
+      }
     }
   }, []);
 

@@ -1,18 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-// Supabase redirects here after email link clicks (password reset, email confirm, etc.)
-// Exchanges the one-time code for a session, then sends the user to the right page.
-//
-// IMPORTANT: we must write the session cookies onto the *same* redirect response we return.
-// Using createClient() (which writes to next/headers) drops cookies when we create a new
-// NextResponse.redirect — so we instantiate createServerClient directly here.
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
+  const oauthError = searchParams.get("error");
+  const oauthErrorDesc = searchParams.get("error_description");
   const type = searchParams.get("type"); // "recovery" for password reset
 
   const isRecovery = type === "recovery";
+
+  // Supabase/Google sends error params when OAuth fails (e.g. user denied, bad config).
+  if (oauthError) {
+    console.error("[auth/callback] OAuth error:", oauthError, oauthErrorDesc);
+    const desc = oauthErrorDesc ? encodeURIComponent(oauthErrorDesc) : "";
+    if (isRecovery) {
+      return NextResponse.redirect(`${origin}/forgot-password?error=expired`);
+    }
+    return NextResponse.redirect(
+      `${origin}/login?error=auth${desc ? `&error_description=${desc}` : ""}`
+    );
+  }
+
   const redirectUrl = isRecovery ? `${origin}/reset-password` : `${origin}/dashboard`;
 
   // Build the redirect response first so we can stamp cookies onto it.
@@ -27,11 +36,16 @@ export async function GET(request: NextRequest) {
           getAll() {
             return request.cookies.getAll();
           },
-          setAll(cookiesToSet) {
-            // Write session cookies directly onto our redirect response.
+          // @supabase/ssr 0.10+ passes cache-control headers as the second arg.
+          setAll(cookiesToSet, responseHeaders) {
             cookiesToSet.forEach(({ name, value, options }) =>
               response.cookies.set(name, value, options)
             );
+            if (responseHeaders) {
+              Object.entries(responseHeaders).forEach(([k, v]) =>
+                response.headers.set(k, v as string)
+              );
+            }
           },
         },
       }
@@ -40,12 +54,13 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (error) {
-      // Code is invalid or expired. For OAuth (Google) failures redirect to login;
-      // for email recovery flows redirect to forgot-password.
+      console.error("[auth/callback] exchangeCodeForSession error:", error.message);
       if (isRecovery) {
         return NextResponse.redirect(`${origin}/forgot-password?error=expired`);
       }
-      return NextResponse.redirect(`${origin}/login?error=auth`);
+      return NextResponse.redirect(
+        `${origin}/login?error=auth&error_description=${encodeURIComponent(error.message)}`
+      );
     }
   }
 
