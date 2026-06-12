@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
+export const dynamic = "force-dynamic";
+
+function noCache(r: NextResponse) {
+  r.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
+  return r;
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
@@ -15,10 +22,12 @@ export async function GET(request: NextRequest) {
     console.error("[auth/callback] OAuth error:", oauthError, oauthErrorDesc);
     const desc = oauthErrorDesc ? encodeURIComponent(oauthErrorDesc) : "";
     if (isRecovery) {
-      return NextResponse.redirect(`${origin}/forgot-password?error=expired`);
+      return noCache(NextResponse.redirect(`${origin}/forgot-password?error=expired`));
     }
-    return NextResponse.redirect(
-      `${origin}/login?error=auth${desc ? `&error_description=${desc}` : ""}`
+    return noCache(
+      NextResponse.redirect(
+        `${origin}/login?error=auth${desc ? `&error_description=${desc}` : ""}`
+      )
     );
   }
 
@@ -28,6 +37,9 @@ export async function GET(request: NextRequest) {
   const response = NextResponse.redirect(redirectUrl);
 
   if (code) {
+    // Log first 6 chars to distinguish Google codes (4/0A…) from Supabase PKCE codes.
+    console.log("[auth/callback] code prefix:", code.slice(0, 6));
+
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -56,13 +68,15 @@ export async function GET(request: NextRequest) {
     if (error) {
       console.error("[auth/callback] exchangeCodeForSession error:", error.message);
       if (isRecovery) {
-        return NextResponse.redirect(`${origin}/forgot-password?error=expired`);
+        return noCache(NextResponse.redirect(`${origin}/forgot-password?error=expired`));
       }
-      return NextResponse.redirect(
-        `${origin}/login?error=auth&error_description=${encodeURIComponent(error.message)}`
+      return noCache(
+        NextResponse.redirect(
+          `${origin}/login?error=auth&error_description=${encodeURIComponent(error.message)}`
+        )
       );
     }
   }
 
-  return response;
+  return noCache(response);
 }
