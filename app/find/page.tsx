@@ -16,6 +16,14 @@ interface FindResult {
   subscores: Array<{ category: string; score: number; summary: string }>;
 }
 
+interface StreamSummary {
+  total_found: number;
+  total_analyzed: number;
+  errors: number;
+  message?: string;
+}
+
+// Fallback shape for non-streaming responses
 interface FindResponse {
   results: FindResult[];
   total_found: number;
@@ -108,7 +116,6 @@ function MapView({ results }: { results: GeoResult[] }) {
 
     // Load Mapbox GL JS from CDN
     const existing = document.getElementById("mapbox-script");
-    const existingCss = document.getElementById("mapbox-css");
 
     function initMap() {
       if (!mapRef.current) return;
@@ -211,7 +218,6 @@ function MapView({ results }: { results: GeoResult[] }) {
       script.onerror = () => { setMapError("Failed to load Mapbox."); setLoading(false); };
       document.head.appendChild(script);
     } else {
-      // Already loaded
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if ((window as any).mapboxgl) {
         initMap();
@@ -287,10 +293,13 @@ export default function FindPage() {
   const [maxResults, setMaxResults] = useState("10");
 
   // UI state
-  const [loading,   setLoading]   = useState(false);
-  const [response,  setResponse]  = useState<FindResponse | null>(null);
-  const [error,     setError]     = useState<string | null>(null);
-  const [viewMode,  setViewMode]  = useState<"list" | "map">("list");
+  const [loading,       setLoading]       = useState(false);
+  const [streaming,     setStreaming]     = useState(false);
+  const [progress,      setProgress]      = useState<{ current: number; total: number; address: string } | null>(null);
+  const [results,       setResults]       = useState<FindResult[]>([]);
+  const [streamSummary, setStreamSummary] = useState<StreamSummary | null>(null);
+  const [error,         setError]         = useState<string | null>(null);
+  const [viewMode,      setViewMode]      = useState<"list" | "map">("list");
 
   // Geocoded results for map
   const [geoResults, setGeoResults] = useState<GeoResult[]>([]);
@@ -306,6 +315,9 @@ export default function FindPage() {
   const [saving,        setSaving]        = useState(false);
   const [saveError,     setSaveError]     = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+
+  // Active stream reader — kept so we can cancel on re-submit
+  const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
 
   function openSaveModal() {
     setSaveName(location.trim() ? `${location.trim()} deals` : "My search");
@@ -364,9 +376,19 @@ export default function FindPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!location.trim()) return;
+
+    // Cancel any in-progress stream before starting a new one
+    if (readerRef.current) {
+      await readerRef.current.cancel().catch(() => undefined);
+      readerRef.current = null;
+    }
+
     setLoading(true);
+    setStreaming(false);
     setError(null);
-    setResponse(null);
+    setResults([]);
+    setStreamSummary(null);
+    setProgress(null);
     setSelectedIds(new Set());
     setGeoResults([]);
     setViewMode("list");
@@ -385,18 +407,75 @@ export default function FindPage() {
         }),
       });
 
-      const data: FindResponse = await res.json();
-
       if (!res.ok) {
-        setError(data.error ?? `Server error ${res.status}`);
-      } else {
-        setResponse(data);
-        setGeoResults(data.results.map((r) => ({ ...r })));
+        const data = await res.json().catch(() => ({ error: `Server error ${res.status}` }));
+        setError((data as FindResponse).error ?? `Server error ${res.status}`);
+        return;
       }
+
+      // Fallback: no streaming body (shouldn't happen in practice)
+      if (!res.body) {
+        const data: FindResponse = await res.json();
+        setResults(data.results ?? []);
+        setGeoResults((data.results ?? []).map((r) => ({ ...r })));
+        setStreamSummary({
+          total_found:    data.total_found,
+          total_analyzed: data.total_analyzed,
+          errors:         data.errors,
+          message:        data.message,
+        });
+        return;
+      }
+
+      const reader = res.body.getReader();
+      readerRef.current = reader;
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      setStreaming(true);
+      setLoading(false);
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const event = JSON.parse(line);
+            if (event.type === "progress") {
+              setProgress(event);
+            } else if (event.type === "result") {
+              setResults((prev) => [...prev, event as FindResult]);
+              setGeoResults((prev) => [...prev, { ...(event as FindResult) }]);
+            } else if (event.type === "done") {
+              setStreamSummary({
+                total_found:    event.total_found,
+                total_analyzed: event.total_analyzed,
+                errors:         event.errors,
+                message:        event.message,
+              });
+              setStreaming(false);
+              setProgress(null);
+            }
+            // "error" events: silently tracked via errors count in "done"
+          } catch {
+            // malformed line — skip
+          }
+        }
+      }
+
+      setStreaming(false);
+
     } catch (err) {
+      // Ignore cancellation errors from re-submit
+      if (err instanceof Error && err.name === "AbortError") return;
       setError(err instanceof Error ? err.message : "Network error — please try again.");
     } finally {
       setLoading(false);
+      readerRef.current = null;
     }
   }
 
@@ -421,11 +500,12 @@ export default function FindPage() {
     setGeocoding(false);
   }
 
-  const results = response?.results ?? [];
   const hasPartialFailure =
-    response &&
-    response.errors > 0 &&
-    response.total_analyzed < response.total_found;
+    streamSummary &&
+    streamSummary.errors > 0 &&
+    streamSummary.total_analyzed < streamSummary.total_found;
+
+  const busy = loading || streaming;
 
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: "32px 24px 120px" }}>
@@ -536,17 +616,17 @@ export default function FindPage() {
         {/* Submit */}
         <button
           type="submit"
-          disabled={loading || !location.trim()}
+          disabled={busy || !location.trim()}
           style={{
             height: 40,
             padding: "0 20px",
-            background: loading || !location.trim() ? "rgba(91,91,214,0.4)" : "var(--accent)",
+            background: busy || !location.trim() ? "rgba(91,91,214,0.4)" : "var(--accent)",
             color: "#fff",
             border: "none",
             borderRadius: 7,
             fontSize: 13,
             fontWeight: 700,
-            cursor: loading || !location.trim() ? "not-allowed" : "pointer",
+            cursor: busy || !location.trim() ? "not-allowed" : "pointer",
             display: "flex",
             alignItems: "center",
             gap: 8,
@@ -560,7 +640,7 @@ export default function FindPage() {
               <path strokeLinecap="round" d="M12 2a10 10 0 0 1 10 10" />
             </svg>
           )}
-          {loading ? `Analyzing ${maxResults} properties…` : "Find & Analyze"}
+          {loading ? "Searching…" : "Find & Analyze"}
         </button>
 
         <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 10 }}>
@@ -588,7 +668,7 @@ export default function FindPage() {
         </div>
       )}
 
-      {response?.message && results.length === 0 && (
+      {streamSummary?.message && results.length === 0 && !streaming && (
         <div style={{
           background: "var(--bg-surface)",
           border: "1px solid var(--border-subtle)",
@@ -597,11 +677,11 @@ export default function FindPage() {
           textAlign: "center",
           marginBottom: 20,
         }}>
-          <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>{response.message}</p>
+          <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>{streamSummary.message}</p>
         </div>
       )}
 
-      {response && response.total_analyzed === 0 && response.total_found > 0 && (
+      {streamSummary && streamSummary.total_analyzed === 0 && streamSummary.total_found > 0 && !streaming && (
         <div style={{
           background: "rgba(232,56,79,0.08)",
           border: "1px solid rgba(232,56,79,0.3)",
@@ -615,7 +695,7 @@ export default function FindPage() {
         </div>
       )}
 
-      {hasPartialFailure && (
+      {hasPartialFailure && !streaming && (
         <div style={{
           background: "rgba(245,166,35,0.08)",
           border: "1px solid rgba(245,166,35,0.3)",
@@ -624,123 +704,156 @@ export default function FindPage() {
           marginBottom: 16,
         }}>
           <p style={{ fontSize: 12, color: "#F5A623", margin: 0 }}>
-            {response.errors} {response.errors === 1 ? "property" : "properties"} could not be analyzed
+            {streamSummary!.errors} {streamSummary!.errors === 1 ? "property" : "properties"} could not be analyzed
             (Zillow data unavailable or parsing error)
           </p>
+        </div>
+      )}
+
+      {/* ── Progress bar ─────────────────────────────────────────────────── */}
+      {streaming && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{
+            width: "100%",
+            height: 3,
+            background: "var(--bg-elevated)",
+            borderRadius: 2,
+            overflow: "hidden",
+          }}>
+            <div style={{
+              height: "100%",
+              background: "var(--accent)",
+              borderRadius: 2,
+              width: progress ? `${(progress.current / progress.total) * 100}%` : "0%",
+              transition: "width 0.4s ease",
+            }} />
+          </div>
+          {progress && (
+            <p style={{
+              fontSize: 11,
+              color: "var(--text-muted)",
+              fontFamily: "var(--font-mono), monospace",
+              marginTop: 6,
+            }}>
+              Analyzing {progress.current} of {progress.total} — {progress.address}
+            </p>
+          )}
         </div>
       )}
 
       {/* ── Results ───────────────────────────────────────────────────────── */}
       {results.length > 0 && (
         <div style={{ marginBottom: 16 }}>
-          {/* Summary row + view toggle */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
-            <p style={{ fontSize: 11, color: "var(--text-muted)" }}>
-              {response!.total_analyzed} of {response!.total_found} properties analyzed
-              {response!.errors > 0 && ` · ${response!.errors} failed`}
-            </p>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {/* Map / List toggle */}
-              <div
-                style={{
-                  display: "flex",
-                  border: "1px solid var(--border-subtle)",
-                  borderRadius: 6,
-                  overflow: "hidden",
-                }}
-              >
-                {(["list", "map"] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    onClick={mode === "map" ? handleMapToggle : () => setViewMode("list")}
-                    style={{
-                      height: 30,
-                      padding: "0 12px",
-                      fontSize: 11,
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      border: "none",
-                      background: viewMode === mode ? "rgba(91,91,214,0.15)" : "transparent",
-                      color: viewMode === mode ? "var(--accent)" : "var(--text-muted)",
-                      fontFamily: "inherit",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 5,
-                      transition: "background 0.1s, color 0.1s",
-                    }}
-                  >
-                    {mode === "list" ? (
-                      <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h10" />
-                      </svg>
-                    ) : (
-                      <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                          d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                      </svg>
-                    )}
-                    {mode === "list" ? "List" : geocoding ? "Loading…" : "Map"}
-                  </button>
-                ))}
+          {/* Summary row + view toggle — only after streaming completes */}
+          {!streaming && streamSummary && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+              <p style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                {streamSummary.total_analyzed} of {streamSummary.total_found} properties analyzed
+                {streamSummary.errors > 0 && ` · ${streamSummary.errors} failed`}
+              </p>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {/* Map / List toggle */}
+                <div
+                  style={{
+                    display: "flex",
+                    border: "1px solid var(--border-subtle)",
+                    borderRadius: 6,
+                    overflow: "hidden",
+                  }}
+                >
+                  {(["list", "map"] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      onClick={mode === "map" ? handleMapToggle : () => setViewMode("list")}
+                      style={{
+                        height: 30,
+                        padding: "0 12px",
+                        fontSize: 11,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        border: "none",
+                        background: viewMode === mode ? "rgba(91,91,214,0.15)" : "transparent",
+                        color: viewMode === mode ? "var(--accent)" : "var(--text-muted)",
+                        fontFamily: "inherit",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 5,
+                        transition: "background 0.1s, color 0.1s",
+                      }}
+                    >
+                      {mode === "list" ? (
+                        <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h10" />
+                        </svg>
+                      ) : (
+                        <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                            d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                        </svg>
+                      )}
+                      {mode === "list" ? "List" : geocoding ? "Loading…" : "Map"}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  onClick={openSaveModal}
+                  style={{
+                    height: 30,
+                    padding: "0 12px",
+                    background: "transparent",
+                    border: "1px solid var(--border-subtle)",
+                    borderRadius: 6,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: "var(--text-secondary)",
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    transition: "border-color 0.12s, color 0.12s",
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLElement).style.borderColor = "var(--accent)";
+                    (e.currentTarget as HTMLElement).style.color = "var(--accent)";
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLElement).style.borderColor = "var(--border-subtle)";
+                    (e.currentTarget as HTMLElement).style.color = "var(--text-secondary)";
+                  }}
+                >
+                  <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                  </svg>
+                  Save as alert
+                </button>
+                <Link
+                  href="/dashboard"
+                  style={{
+                    height: 30,
+                    padding: "0 12px",
+                    background: "rgba(91,91,214,0.10)",
+                    border: "1px solid rgba(91,91,214,0.25)",
+                    borderRadius: 6,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: "var(--accent)",
+                    textDecoration: "none",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  View in portfolio
+                </Link>
               </div>
-
-              <button
-                onClick={openSaveModal}
-                style={{
-                  height: 30,
-                  padding: "0 12px",
-                  background: "transparent",
-                  border: "1px solid var(--border-subtle)",
-                  borderRadius: 6,
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: "var(--text-secondary)",
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                  transition: "border-color 0.12s, color 0.12s",
-                }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLElement).style.borderColor = "var(--accent)";
-                  (e.currentTarget as HTMLElement).style.color = "var(--accent)";
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLElement).style.borderColor = "var(--border-subtle)";
-                  (e.currentTarget as HTMLElement).style.color = "var(--text-secondary)";
-                }}
-              >
-                <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                </svg>
-                Save as alert
-              </button>
-              <Link
-                href="/dashboard"
-                style={{
-                  height: 30,
-                  padding: "0 12px",
-                  background: "rgba(91,91,214,0.10)",
-                  border: "1px solid rgba(91,91,214,0.25)",
-                  borderRadius: 6,
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: "var(--accent)",
-                  textDecoration: "none",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                View in portfolio
-              </Link>
             </div>
-          </div>
+          )}
 
-          {/* Map view */}
-          {viewMode === "map" && (
+          {/* Map view — only after streaming completes */}
+          {viewMode === "map" && !streaming && (
             <MapView results={geoResults} />
           )}
 
@@ -771,11 +884,13 @@ export default function FindPage() {
                 ))}
               </div>
 
-              {/* Rows */}
+              {/* Rows — animate in as they arrive */}
               {results.map((r, i) => (
                 <div
                   key={r.property_id}
+                  className="ps-result-enter"
                   style={{
+                    animationDelay: `${Math.min(i * 0.05, 0.3)}s`,
                     display: "grid",
                     gridTemplateColumns: "minmax(140px, 2fr) 56px 100px 76px 108px minmax(120px, 1fr) 130px",
                     padding: "13px 16px",

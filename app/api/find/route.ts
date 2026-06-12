@@ -13,19 +13,6 @@ export const maxDuration = 300;
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface FindResult {
-  property_id: string;
-  address: string;
-  overall_score: number;
-  verdict: string;
-  subscores: unknown[];
-  list_price: number | null;
-  monthly_cash_flow: number | null;
-  cap_rate: string | null;
-}
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function parseClaudeJson(raw: string): Record<string, unknown> {
@@ -97,13 +84,12 @@ export async function POST(request: NextRequest) {
       20,
     );
 
-    // ── Step 3: Search Zillapi listings ──────────────────────────────────────
+    // ── Search Zillapi listings ───────────────────────────────────────────────
     const apiKey = process.env.ZILLAPI_KEY;
     if (!apiKey || apiKey === "your_zillapi_key") {
       throw new Error("ZILLAPI_KEY not configured — get a free key at zillapi.com/signup");
     }
 
-    // Zillapi /v1/listings requires a bounding box — geocode the location first
     const coords = await geocodeLocation(location);
     if (!coords) {
       return NextResponse.json(
@@ -111,6 +97,7 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
+
     // ~0.3° ≈ 20 miles radius → 40×40 mile search area
     const BBOX_DEG = 0.3;
     const bbox = `${coords.lon - BBOX_DEG},${coords.lat - BBOX_DEG},${coords.lon + BBOX_DEG},${coords.lat + BBOX_DEG}`;
@@ -149,113 +136,155 @@ export async function POST(request: NextRequest) {
       ? searchJson
       : (searchJson.results ?? searchJson.data ?? searchJson.listings ?? []);
 
-    if (listings.length === 0) {
-      return NextResponse.json({
-        results: [],
-        total_found: 0,
-        total_analyzed: 0,
-        errors: 0,
-        message: "No listings found matching your criteria. Try broadening your search.",
-      });
-    }
-
     const total_found = listings.length;
 
-    // ── Steps 4–7: Analyze each listing concurrently ─────────────────────────
-    const analysisPromises = listings.slice(0, max_results).map(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      async (listing: any): Promise<FindResult> => {
-        // Step 4: Extract Zillow URL
+    // ── Stream NDJSON results ─────────────────────────────────────────────────
+    const encoder = new TextEncoder();
+    const { readable, writable } = new TransformStream();
+    const writer = writable.getWriter();
+
+    const writeEvent = async (obj: unknown) => {
+      await writer.write(encoder.encode(JSON.stringify(obj) + "\n"));
+    };
+
+    // Process listings sequentially in the background
+    (async () => {
+      let total_analyzed = 0;
+      let errors = 0;
+
+      if (total_found === 0) {
+        await writeEvent({
+          type: "done",
+          total_found: 0,
+          total_analyzed: 0,
+          errors: 0,
+          message: "No listings found matching your criteria. Try broadening your search.",
+        });
+        await writer.close();
+        return;
+      }
+
+      const toProcess = listings.slice(0, max_results);
+
+      for (let i = 0; i < toProcess.length; i++) {
+        const listing = toProcess[i];
+
+        // Extract display address before analysis (for progress event)
         const rawUrl: string = listing.detailUrl ?? listing.hdpUrl ?? listing.detail_url ?? "";
-        if (!rawUrl) throw new Error("No Zillow URL in listing");
-        const zillowUrl = rawUrl.startsWith("http")
-          ? rawUrl
-          : `https://www.zillow.com${rawUrl}`;
+        const addressFromUrl = rawUrl.includes("/homedetails/")
+          ? decodeURIComponent(
+              rawUrl.split("/homedetails/")[1]?.split("/")[0]?.replace(/-/g, " ") ?? "",
+            ).trim()
+          : "";
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const displayAddress: string =
+          ((listing as any).address
+            ?? (listing as any).streetAddress
+            ?? (listing as any).fullAddress
+            ?? addressFromUrl
+          ) || "Property";
 
-        // Step 5: Fetch full property data via Zillapi
-        const { listingText: rawText, rentcast } = await fetchViaZillapi(zillowUrl);
-        const listingText = appendFinancials(rawText, null);
-
-        // Step 6: Claude analysis
-        const message = await anthropic.messages.create({
-          model: "claude-sonnet-4-6",
-          max_tokens: 3500,
-          temperature: 0.2,
-          system: SYSTEM_PROMPT,
-          messages: [{ role: "user", content: listingText }],
+        await writeEvent({
+          type: "progress",
+          current: i + 1,
+          total: toProcess.length,
+          address: displayAddress,
         });
 
-        const content = message.content[0];
-        if (content.type !== "text") throw new Error("Unexpected Claude response type");
-        const analysis = parseClaudeJson(content.text);
+        try {
+          if (!rawUrl) throw new Error("No Zillow URL in listing");
 
-        // Step 7: Insert into properties table with source='deal_finder'
-        const payload = {
-          user_id:           user.id,
-          address:           analysis.address,
-          listing_text:      listingText,
-          overall_score:     analysis.overall_score,
-          subscores:         analysis.subscores,
-          verdict:           analysis.verdict,
-          bull_case:         analysis.bull_case,
-          bear_case:         analysis.bear_case,
-          rentcast_estimate: rentcast?.estimate ?? null,
-          rentcast_comps:    rentcast?.comparables ?? null,
-          mud_rate:          null,
-          source:            "deal_finder",
-        };
+          const zillowUrl = rawUrl.startsWith("http")
+            ? rawUrl
+            : `https://www.zillow.com${rawUrl}`;
 
-        let ins = await supabase
-          .from("properties")
-          .insert(payload)
-          .select("id")
-          .single();
+          // Fetch full property data via Zillapi
+          const { listingText: rawText, rentcast } = await fetchViaZillapi(zillowUrl);
+          const listingText = appendFinancials(rawText, null);
 
-        // 42703 = undefined_column — source column migration not yet applied
-        if (ins.error?.code === "42703") {
-          const { address, listing_text, overall_score, subscores, verdict, bull_case, bear_case } = payload;
-          ins = await supabase
+          // Claude analysis
+          const message = await anthropic.messages.create({
+            model: "claude-sonnet-4-6",
+            max_tokens: 3500,
+            temperature: 0.2,
+            system: SYSTEM_PROMPT,
+            messages: [{ role: "user", content: listingText }],
+          });
+
+          const content = message.content[0];
+          if (content.type !== "text") throw new Error("Unexpected Claude response type");
+          const analysis = parseClaudeJson(content.text);
+
+          // Insert into properties table with source='deal_finder'
+          const payload = {
+            user_id:           user.id,
+            address:           analysis.address,
+            listing_text:      listingText,
+            overall_score:     analysis.overall_score,
+            subscores:         analysis.subscores,
+            verdict:           analysis.verdict,
+            bull_case:         analysis.bull_case,
+            bear_case:         analysis.bear_case,
+            rentcast_estimate: rentcast?.estimate ?? null,
+            rentcast_comps:    rentcast?.comparables ?? null,
+            mud_rate:          null,
+            source:            "deal_finder",
+          };
+
+          let ins = await supabase
             .from("properties")
-            .insert({ user_id: user.id, address, listing_text, overall_score, subscores, verdict, bull_case, bear_case })
+            .insert(payload)
             .select("id")
             .single();
-        }
 
-        if (ins.error) {
-          throw new Error(
-            typeof ins.error.message === "string" ? ins.error.message : JSON.stringify(ins.error),
-          );
-        }
-        if (!ins.data) throw new Error("Insert returned no data");
+          // 42703 = undefined_column — source column migration not yet applied
+          if (ins.error?.code === "42703") {
+            const { address, listing_text, overall_score, subscores, verdict, bull_case, bear_case } = payload;
+            ins = await supabase
+              .from("properties")
+              .insert({ user_id: user.id, address, listing_text, overall_score, subscores, verdict, bull_case, bear_case })
+              .select("id")
+              .single();
+          }
 
-        return {
-          property_id:      ins.data.id,
-          address:          analysis.address as string,
-          overall_score:    analysis.overall_score as number,
-          verdict:          analysis.verdict as string,
-          subscores:        analysis.subscores as unknown[],
-          list_price:       parseListPrice(listingText),
-          monthly_cash_flow: parseCashFlow(listingText),
-          cap_rate:         parseCapRate(listingText),
-        };
+          if (ins.error) {
+            throw new Error(
+              typeof ins.error.message === "string" ? ins.error.message : JSON.stringify(ins.error),
+            );
+          }
+          if (!ins.data) throw new Error("Insert returned no data");
+
+          total_analyzed++;
+          await writeEvent({
+            type:              "result",
+            property_id:       ins.data.id,
+            address:           analysis.address as string,
+            overall_score:     analysis.overall_score as number,
+            verdict:           analysis.verdict as string,
+            subscores:         analysis.subscores as unknown[],
+            list_price:        parseListPrice(listingText),
+            monthly_cash_flow: parseCashFlow(listingText),
+            cap_rate:          parseCapRate(listingText),
+          });
+        } catch (err) {
+          errors++;
+          const errMsg = err instanceof Error ? err.message : String(err);
+          await writeEvent({ type: "error", address: displayAddress, message: errMsg });
+        }
+      }
+
+      await writeEvent({ type: "done", total_found, total_analyzed, errors });
+      await writer.close();
+    })().catch(console.error);
+
+    return new Response(readable, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-cache",
       },
-    );
-
-    const settled = await Promise.allSettled(analysisPromises);
-
-    const results: FindResult[] = settled
-      .filter((r): r is PromiseFulfilledResult<FindResult> => r.status === "fulfilled")
-      .map((r) => r.value)
-      .sort((a, b) => b.overall_score - a.overall_score);
-
-    const errors = settled.filter((r) => r.status === "rejected").length;
-
-    return NextResponse.json({
-      results,
-      total_found,
-      total_analyzed: results.length,
-      errors,
     });
+
   } catch (err) {
     let message: string;
     if (err instanceof Error) {
