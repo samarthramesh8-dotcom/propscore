@@ -381,7 +381,7 @@ export async function geocodeLocation(query: string): Promise<{ lat: number; lon
 
 // ─── Rentcast fetch ───────────────────────────────────────────────────────────
 
-async function fetchRentcastEstimate(
+export async function fetchRentcastEstimate(
   address: string,
   city: string,
   state: string,
