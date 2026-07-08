@@ -299,6 +299,7 @@ export default function FindPage() {
   const [results,       setResults]       = useState<FindResult[]>([]);
   const [streamSummary, setStreamSummary] = useState<StreamSummary | null>(null);
   const [error,         setError]         = useState<string | null>(null);
+  const [failureReasons, setFailureReasons] = useState<string[]>([]);
   const [viewMode,      setViewMode]      = useState<"list" | "map">("list");
 
   // Geocoded results for map
@@ -388,6 +389,7 @@ export default function FindPage() {
     setError(null);
     setResults([]);
     setStreamSummary(null);
+    setFailureReasons([]);
     setProgress(null);
     setSelectedIds(new Set());
     setGeoResults([]);
@@ -459,8 +461,9 @@ export default function FindPage() {
               });
               setStreaming(false);
               setProgress(null);
+            } else if (event.type === "error") {
+              setFailureReasons((prev) => [...prev, `${event.address}: ${event.message}`]);
             }
-            // "error" events: silently tracked via errors count in "done"
           } catch {
             // malformed line — skip
           }
@@ -689,9 +692,16 @@ export default function FindPage() {
           padding: "14px 16px",
           marginBottom: 20,
         }}>
-          <p style={{ fontSize: 13, color: "#E8384F", margin: 0 }}>
-            Analysis failed for all properties. Check your API keys.
+          <p style={{ fontSize: 13, color: "#E8384F", margin: "0 0 6px" }}>
+            Analysis failed for all properties.
           </p>
+          {failureReasons.length > 0 && (
+            <ul style={{ fontSize: 12, color: "#E8384F", opacity: 0.85, margin: 0, paddingLeft: 18 }}>
+              {[...new Set(failureReasons)].slice(0, 5).map((reason, i) => (
+                <li key={i}>{reason}</li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 
@@ -703,10 +713,16 @@ export default function FindPage() {
           padding: "12px 16px",
           marginBottom: 16,
         }}>
-          <p style={{ fontSize: 12, color: "#F5A623", margin: 0 }}>
+          <p style={{ fontSize: 12, color: "#F5A623", margin: failureReasons.length > 0 ? "0 0 6px" : 0 }}>
             {streamSummary!.errors} {streamSummary!.errors === 1 ? "property" : "properties"} could not be analyzed
-            (Zillow data unavailable or parsing error)
           </p>
+          {failureReasons.length > 0 && (
+            <ul style={{ fontSize: 12, color: "#F5A623", opacity: 0.85, margin: 0, paddingLeft: 18 }}>
+              {[...new Set(failureReasons)].slice(0, 5).map((reason, i) => (
+                <li key={i}>{reason}</li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 
