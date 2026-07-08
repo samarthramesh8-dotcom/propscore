@@ -19,6 +19,50 @@ export interface RentcastComp {
 
 export type PropertyStatus = "watching" | "offer_submitted" | "passed" | "acquired";
 
+export const OUTCOME_TYPES = [
+  "still_watching",
+  "pursued",
+  "passed",
+  "offer_made",
+  "offer_accepted",
+  "offer_rejected",
+  "closed",
+] as const;
+
+export type OutcomeType = (typeof OUTCOME_TYPES)[number];
+
+export interface PropertyOutcome {
+  id: string;
+  property_id: string;
+  user_id: string;
+  outcome_type: OutcomeType;
+  actual_sale_price: number | null;
+  actual_rent_achieved: number | null;
+  days_to_close: number | null;
+  outcome_notes: string | null;
+  recorded_at: string;
+  created_at: string;
+}
+
+export type VerdictTier = "STRONG BUY" | "BUY" | "CONDITIONAL BUY" | "PASS" | "STRONG PASS";
+
+export interface VerdictTierStats {
+  tier: VerdictTier;
+  tracked: number;   // outcomes recorded for properties in this tier
+  resolved: number;  // reached a terminal outcome (closed / offer_accepted / offer_rejected / passed)
+  wins: number;      // closed or offer_accepted
+  winRate: number | null; // wins / resolved, null when resolved === 0
+}
+
+export interface OutcomeStats {
+  totalTracked: number;
+  byVerdictTier: VerdictTierStats[];
+  // Pearson correlation between overall_score and whether the user pursued the
+  // deal (1 = pursued/offer/closed, 0 = passed/offer_rejected). null when fewer
+  // than 3 decided outcomes or zero variance.
+  scoreOutcomeCorrelation: number | null;
+}
+
 export interface Property {
   id: string;
   user_id: string;

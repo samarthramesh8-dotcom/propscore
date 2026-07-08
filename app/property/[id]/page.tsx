@@ -9,6 +9,7 @@ import CashFlowChart from "@/components/CashFlowChart";
 import Sidebar from "@/components/Sidebar";
 import PropertyActions from "@/components/PropertyActions";
 import NotesField from "@/components/NotesField";
+import OutcomeTracker from "@/components/OutcomeTracker";
 import PhotoGallery from "@/components/PhotoGallery";
 import ListingDescription from "@/components/ListingDescription";
 import PriceHistory from "@/components/PriceHistory";
@@ -315,7 +316,10 @@ export default async function PropertyPage({
           {/* 11. Analysis data */}
           <ListingDataSection listingText={property.listing_text} />
 
-          {/* 12. Notes */}
+          {/* 12. Outcome tracking */}
+          <OutcomeTracker propertyId={property.id} />
+
+          {/* 13. Notes */}
           <NotesField propertyId={property.id} initialNotes={property.notes} />
         </div>
       </main>
