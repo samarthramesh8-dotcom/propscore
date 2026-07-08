@@ -5,6 +5,11 @@
 //     add column if not exists status text not null default 'watching'
 //     check (status in ('watching', 'offer_submitted', 'passed', 'acquired'));
 //
+// Migration required for Deep Verify confidence flags (Phase 3):
+//
+//   alter table properties
+//     add column if not exists confidence_flags jsonb;
+//
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
@@ -19,6 +24,10 @@ import {
   appendFinancials,
   extractRichData,
 } from "@/lib/analysis";
+import { runDeepVerify } from "@/lib/deepVerify";
+
+// Single-property analyses can run long when deep_verify is enabled
+export const maxDuration = 300;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -294,6 +303,7 @@ export async function POST(request: NextRequest) {
       typeof body.reanalyze_id === "string" && body.reanalyze_id.trim().length > 0
         ? body.reanalyze_id.trim()
         : null;
+    const deepVerify: boolean = body.deep_verify === true;
 
     if (!rawInput?.trim()) {
       return NextResponse.json({ error: "listing_text is required" }, { status: 400 });
@@ -325,8 +335,26 @@ export async function POST(request: NextRequest) {
 
     const analysis = parseClaudeJson(content.text);
 
+    // ── Optional deep verification (Phase 3) ──────────────────────────────
+    // Opt-in second pass on claude-fable-5 that cross-checks the data sources
+    // behind the verdict (fresh Rentcast pull, comparable-sales search, price
+    // history consistency) and reports material disagreements. It never
+    // changes the verdict — it annotates it.
+    let confidenceFlags: import("@/lib/types").ConfidenceFlag[] | null = null;
+    let verificationNote: string | null = null;
+    if (deepVerify && typeof analysis.address === "string") {
+      const verify = await runDeepVerify({
+        listingText,
+        address: analysis.address,
+      });
+      confidenceFlags = verify.flags;
+      verificationNote = verify.note;
+    }
+
     // Columns shared by both insert and update paths
     const analysisPayload = {
+      // Store flags only when verification actually completed ([] = verified clean)
+      ...(confidenceFlags !== null ? { confidence_flags: confidenceFlags } : {}),
       address:           analysis.address,
       listing_text:      listingText,
       overall_score:     analysis.overall_score,
@@ -416,6 +444,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       property_id: data!.id,
       ...analysis,
+      ...(deepVerify ? {
+        confidence_flags: confidenceFlags,
+        verification_note: verificationNote,
+      } : {}),
     });
   } catch (err) {
     // Supabase, fetch, and other non-Error throws land here as plain objects.

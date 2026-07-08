@@ -63,6 +63,14 @@ export interface OutcomeStats {
   scoreOutcomeCorrelation: number | null;
 }
 
+// One field where independent data sources disagree beyond threshold (Phase 3 deep verify)
+export interface ConfidenceFlag {
+  field: string;                              // e.g. "monthly_rent", "valuation"
+  sources: { name: string; value: number }[]; // conflicting values by source
+  discrepancy_pct: number;                    // spread as % of the smaller value
+  note?: string;                              // short explanation
+}
+
 export interface Property {
   id: string;
   user_id: string;
@@ -82,6 +90,7 @@ export interface Property {
   rich_data: ZillowRichData | null;
   zillow_url: string | null;
   status?: PropertyStatus;
+  confidence_flags?: ConfidenceFlag[] | null;
 }
 
 export interface AnalyzeResponse {
