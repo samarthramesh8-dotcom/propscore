@@ -2,6 +2,8 @@ interface SubscoreCardProps {
   category: string;
   score: number;
   summary: string;
+  /** Position in the breakdown — staggers the verdict-reveal assemble. */
+  index?: number;
 }
 
 function barColor(score: number): string {
@@ -10,16 +12,19 @@ function barColor(score: number): string {
   return "var(--score-red)";
 }
 
-export default function SubscoreCard({ category, score, summary }: SubscoreCardProps) {
+export default function SubscoreCard({ category, score, summary, index = 0 }: SubscoreCardProps) {
   const color = barColor(score);
+  const delay = `${index * 70}ms`;
 
   return (
     <div
+      className="verdict-rise"
       style={{
         background: "var(--bg-surface)",
         border: "1px solid var(--border-subtle)",
         borderRadius: 10,
         padding: "16px 18px",
+        animationDelay: delay,
       }}
     >
       {/* Header */}
@@ -43,7 +48,7 @@ export default function SubscoreCard({ category, score, summary }: SubscoreCardP
         </span>
       </div>
 
-      {/* Progress bar */}
+      {/* Progress bar — fills left-to-right as part of the verdict reveal */}
       <div
         style={{
           height: 3,
@@ -54,12 +59,13 @@ export default function SubscoreCard({ category, score, summary }: SubscoreCardP
         }}
       >
         <div
+          className="verdict-bar-fill"
           style={{
             height: "100%",
             width: `${score}%`,
             background: color,
             borderRadius: 999,
-            transition: "width 0.65s cubic-bezier(0.4, 0, 0.2, 1)",
+            animationDelay: `calc(${delay} + 80ms)`,
           }}
         />
       </div>

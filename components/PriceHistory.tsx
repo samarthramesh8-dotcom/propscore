@@ -28,7 +28,7 @@ function dotColorHex(event: string): string {
   const e = event.toLowerCase();
   if (e.includes("sold")) return "#00D26A";
   if (e.includes("cut") || e.includes("reduc") || e.includes("decreas")) return "#E8384F";
-  if (e.includes("list")) return "#5B5BD6";
+  if (e.includes("list")) return "#7E84A0";
   if (e.includes("increas") || e.includes("rais")) return "#F5A623";
   return "#7A7A9A";
 }
@@ -181,7 +181,7 @@ export default function PriceHistory({ history }: PriceHistoryProps) {
             stroke="var(--accent)"
             strokeWidth={2}
             dot={<EventDot />}
-            activeDot={{ r: 5, fill: "#5B5BD6", stroke: "#111118", strokeWidth: 1.5 }}
+            activeDot={{ r: 5, fill: "#7E84A0", stroke: "#111119", strokeWidth: 1.5 }}
           />
         </LineChart>
       </ResponsiveContainer>

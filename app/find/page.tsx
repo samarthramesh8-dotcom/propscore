@@ -187,7 +187,7 @@ function MapView({ results }: { results: GeoResult[] }) {
                   }</span>
                 </div>
                 ${cfLine}
-                <a href="/property/${r.property_id}" style="display:inline-block;margin-top:8px;font-size:11px;font-weight:600;color:#5B5BD6;text-decoration:none;">
+                <a href="/property/${r.property_id}" style="display:inline-block;margin-top:8px;font-size:11px;font-weight:600;color:#2FD6BE;text-decoration:none;">
                   View Analysis →
                 </a>
               </div>
@@ -340,8 +340,11 @@ export default function FindPage() {
   // Poll interval for recovering an in-progress search after navigation
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Auto-scroll the agent trace as new steps stream in
+  // Agent trace: live while streaming, then collapses to a "how this was
+  // found" artifact the user can re-open. Kept in the agent register (mono,
+  // cyan) so it stays visually distinct from the calm verdict results below.
   const traceRef = useRef<HTMLDivElement | null>(null);
+  const [traceExpanded, setTraceExpanded] = useState(false);
   useEffect(() => {
     traceRef.current?.scrollTo({ top: traceRef.current.scrollHeight, behavior: "smooth" });
   }, [agentSteps]);
@@ -739,8 +742,8 @@ export default function FindPage() {
           style={{
             height: 40,
             padding: "0 20px",
-            background: busy || !location.trim() ? "rgba(91,91,214,0.4)" : "var(--accent)",
-            color: "#fff",
+            background: busy || !location.trim() ? "rgba(var(--agent-rgb),0.35)" : "var(--agent)",
+            color: busy || !location.trim() ? "var(--text-muted)" : "var(--agent-ink)",
             border: "none",
             borderRadius: 7,
             fontSize: 13,
@@ -754,7 +757,7 @@ export default function FindPage() {
           }}
         >
           {loading && (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2.5}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--agent-ink)" strokeWidth={2.5}
               style={{ animation: "spin 0.8s linear infinite" }}>
               <path strokeLinecap="round" d="M12 2a10 10 0 0 1 10 10" />
             </svg>
@@ -873,57 +876,79 @@ export default function FindPage() {
         </div>
       )}
 
-      {/* ── Agent trace — live orchestrator narration ─────────────────────── */}
-      {agentSteps.length > 0 && (
+      {/* ── Agent register — the machine working ──────────────────────────── */}
+      {agentSteps.length > 0 && streaming && (
+        // Live trace: full terminal panel, distinct from the calm results below
         <div style={{ marginBottom: 20 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-            <span style={{
-              fontSize: 9, fontWeight: 600, letterSpacing: "0.14em",
-              textTransform: "uppercase", color: "var(--accent)",
+            <span className="font-mono" style={{
+              fontSize: 9, fontWeight: 600, letterSpacing: "0.16em",
+              textTransform: "uppercase", color: "var(--agent)",
             }}>
-              Agent trace
+              ▸ agent working
             </span>
-            {streaming && (
-              <span style={{
-                width: 6, height: 6, borderRadius: "50%", background: "var(--accent)",
-                animation: "ps-pulse 1.2s ease-in-out infinite",
-              }} />
-            )}
+            <span className="agent-pulse" style={{ width: 6, height: 6, borderRadius: "50%" }} />
           </div>
           <div
             ref={traceRef}
+            className="agent-surface"
             style={{
-              background: "var(--bg-elevated)",
-              border: "1px solid rgba(91,91,214,0.25)",
-              borderLeft: "3px solid var(--accent)",
-              borderRadius: 8,
               padding: "12px 16px",
               maxHeight: 220,
               overflowY: "auto",
               display: "flex",
               flexDirection: "column",
-              gap: 7,
+              gap: 6,
             }}
           >
-            {agentSteps.map((step, i) => (
-              <p
-                key={i}
-                className="font-mono"
-                style={{
-                  fontSize: 11,
-                  lineHeight: 1.6,
-                  margin: 0,
-                  whiteSpace: "pre-wrap",
-                  color: i === agentSteps.length - 1 && streaming
-                    ? "var(--text-primary)"
-                    : "var(--text-secondary)",
-                }}
-              >
-                {step}
-              </p>
-            ))}
+            {agentSteps.map((step, i) => {
+              const isLast = i === agentSteps.length - 1;
+              return (
+                <p
+                  key={i}
+                  className={`agent-log${isLast ? " agent-log-active agent-caret" : ""}`}
+                  style={{ margin: 0, whiteSpace: "pre-wrap" }}
+                >
+                  {step}
+                </p>
+              );
+            })}
           </div>
-          <style>{`@keyframes ps-pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.25 } }`}</style>
+        </div>
+      )}
+
+      {/* Persistent artifact: once the run is done the trace collapses into an
+          expandable "how this was found" strip so the reasoning isn't lost. */}
+      {agentSteps.length > 0 && !streaming && (
+        <div style={{ marginBottom: 20 }}>
+          <button
+            className="agent-strip"
+            onClick={() => setTraceExpanded((v) => !v)}
+            aria-expanded={traceExpanded}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 7,
+              padding: "5px 11px", cursor: "pointer", fontFamily: "inherit",
+            }}
+          >
+            <span style={{ transform: traceExpanded ? "rotate(90deg)" : "none", transition: "transform 0.15s ease", display: "inline-block" }}>▸</span>
+            how this was found · {agentSteps.length} steps
+          </button>
+          {traceExpanded && (
+            <div
+              className="agent-surface"
+              style={{
+                marginTop: 8, padding: "12px 16px",
+                maxHeight: 300, overflowY: "auto",
+                display: "flex", flexDirection: "column", gap: 6,
+              }}
+            >
+              {agentSteps.map((step, i) => (
+                <p key={i} className="agent-log" style={{ margin: 0, whiteSpace: "pre-wrap" }}>
+                  {step}
+                </p>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -958,7 +983,7 @@ export default function FindPage() {
                         fontWeight: 600,
                         cursor: "pointer",
                         border: "none",
-                        background: viewMode === mode ? "rgba(91,91,214,0.15)" : "transparent",
+                        background: viewMode === mode ? "rgba(var(--accent-rgb),0.15)" : "transparent",
                         color: viewMode === mode ? "var(--accent)" : "var(--text-muted)",
                         fontFamily: "inherit",
                         display: "flex",
@@ -1020,8 +1045,8 @@ export default function FindPage() {
                   style={{
                     height: 30,
                     padding: "0 12px",
-                    background: "rgba(91,91,214,0.10)",
-                    border: "1px solid rgba(91,91,214,0.25)",
+                    background: "rgba(var(--accent-rgb),0.1)",
+                    border: "1px solid rgba(var(--accent-rgb),0.25)",
                     borderRadius: 6,
                     fontSize: 11,
                     fontWeight: 600,
@@ -1083,7 +1108,7 @@ export default function FindPage() {
                     gap: 12,
                     alignItems: "center",
                     borderBottom: i < results.length - 1 ? "1px solid var(--border-subtle)" : "none",
-                    background: selectedIds.has(r.property_id) ? "rgba(91,91,214,0.05)" : "transparent",
+                    background: selectedIds.has(r.property_id) ? "rgba(var(--accent-rgb),0.05)" : "transparent",
                     transition: "background 0.1s ease",
                   }}
                 >
@@ -1124,8 +1149,8 @@ export default function FindPage() {
                       href={`/property/${r.property_id}`}
                       style={{
                         height: 26, padding: "0 10px",
-                        background: "rgba(91,91,214,0.10)",
-                        border: "1px solid rgba(91,91,214,0.25)",
+                        background: "rgba(var(--accent-rgb),0.1)",
+                        border: "1px solid rgba(var(--accent-rgb),0.25)",
                         borderRadius: 5, fontSize: 11, fontWeight: 600,
                         color: "var(--accent)", textDecoration: "none",
                         display: "inline-flex", alignItems: "center",
@@ -1138,7 +1163,7 @@ export default function FindPage() {
                       style={{
                         height: 26, padding: "0 10px",
                         background: selectedIds.has(r.property_id)
-                          ? "rgba(91,91,214,0.18)"
+                          ? "rgba(var(--accent-rgb),0.18)"
                           : "transparent",
                         border: `1px solid ${selectedIds.has(r.property_id) ? "var(--accent)" : "var(--border-subtle)"}`,
                         borderRadius: 5, fontSize: 11, fontWeight: 600,
@@ -1199,9 +1224,9 @@ export default function FindPage() {
             href={`/compare?ids=${[...selectedIds].join(",")}`}
             style={{
               height: 32, padding: "0 16px",
-              background: selectedIds.size >= 2 ? "var(--accent)" : "rgba(91,91,214,0.3)",
+              background: selectedIds.size >= 2 ? "var(--agent)" : "rgba(var(--agent-rgb),0.25)",
               borderRadius: 6, fontSize: 12, fontWeight: 700,
-              color: "#fff", textDecoration: "none",
+              color: selectedIds.size >= 2 ? "var(--agent-ink)" : "var(--text-muted)", textDecoration: "none",
               display: "inline-flex", alignItems: "center",
               pointerEvents: selectedIds.size >= 2 ? "auto" : "none",
               transition: "background 0.12s ease",
@@ -1265,7 +1290,7 @@ export default function FindPage() {
               <button
                 onClick={handleSaveAlert}
                 disabled={saving || !saveName.trim()}
-                style={{ padding: "8px 16px", borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: saving || !saveName.trim() ? "not-allowed" : "pointer", border: "none", background: saving || !saveName.trim() ? "rgba(91,91,214,0.4)" : "var(--accent)", color: "#fff", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 7 }}
+                style={{ padding: "8px 16px", borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: saving || !saveName.trim() ? "not-allowed" : "pointer", border: "none", background: saving || !saveName.trim() ? "rgba(var(--agent-rgb),0.35)" : "var(--agent)", color: saving || !saveName.trim() ? "var(--text-muted)" : "var(--agent-ink)", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 7 }}
               >
                 {saving && (
                   <svg width="12" height="12" fill="none" viewBox="0 0 24 24" style={{ animation: "spin 0.8s linear infinite" }}>

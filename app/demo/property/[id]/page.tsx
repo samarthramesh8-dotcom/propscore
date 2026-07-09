@@ -41,7 +41,7 @@ export default async function DemoPropertyPage({
           style={{
             display: "flex", alignItems: "center", justifyContent: "space-between",
             gap: 12, padding: "10px 20px",
-            background: "rgba(91,91,214,0.08)", borderBottom: "1px solid rgba(91,91,214,0.2)",
+            background: "rgba(var(--accent-rgb),0.08)", borderBottom: "1px solid rgba(var(--accent-rgb),0.2)",
             flexWrap: "wrap",
           }}
         >
@@ -298,7 +298,7 @@ export default async function DemoPropertyPage({
           {/* ── CTA ──────────────────────────────────────────── */}
           <div
             style={{
-              background: "rgba(91,91,214,0.06)", border: "1px solid rgba(91,91,214,0.18)",
+              background: "rgba(var(--agent-rgb),0.06)", border: "1px solid rgba(var(--agent-rgb),0.18)",
               borderRadius: 10, padding: "20px 24px",
               display: "flex", alignItems: "center", justifyContent: "space-between",
               gap: 16, flexWrap: "wrap",

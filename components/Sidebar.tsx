@@ -170,11 +170,11 @@ export default function Sidebar() {
           >
             <div
               style={{
-                width: 26, height: 26, borderRadius: 6, background: "var(--accent)",
+                width: 26, height: 26, borderRadius: 6, background: "var(--agent)",
                 display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
               }}
             >
-              <svg width="13" height="13" fill="none" stroke="white" viewBox="0 0 24 24">
+              <svg width="13" height="13" fill="none" stroke="var(--agent-ink)" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2}
                   d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
               </svg>
@@ -200,7 +200,7 @@ export default function Sidebar() {
                   padding: "7px 10px", borderRadius: 7,
                   fontSize: 13, fontWeight: 500, textDecoration: "none",
                   color: active ? "var(--text-primary)" : "var(--text-secondary)",
-                  background: active ? "rgba(91, 91, 214, 0.12)" : "transparent",
+                  background: active ? "rgba(var(--accent-rgb), 0.12)" : "transparent",
                   transition: "background 0.12s ease, color 0.12s ease",
                   marginBottom: 2,
                 }}
@@ -242,7 +242,7 @@ export default function Sidebar() {
                     padding: "7px 10px", borderRadius: 7,
                     fontSize: 13, fontWeight: 500, textDecoration: "none",
                     color: active ? "var(--text-primary)" : "var(--text-secondary)",
-                    background: active ? "rgba(91, 91, 214, 0.12)" : "transparent",
+                    background: active ? "rgba(var(--accent-rgb), 0.12)" : "transparent",
                     transition: "background 0.12s ease, color 0.12s ease",
                     marginBottom: 2,
                   }}
@@ -281,14 +281,14 @@ export default function Sidebar() {
                 display: "flex", alignItems: "center", justifyContent: "center",
                 gap: 7, padding: "8px 12px", borderRadius: 7,
                 fontSize: 12, fontWeight: 700, textDecoration: "none",
-                color: "#fff", background: "var(--accent)",
+                color: "var(--agent-ink)", background: "var(--agent)",
                 letterSpacing: "-0.01em",
                 transition: "background 0.15s ease",
               }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--accent-hover)"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--accent)"; }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--agent-hover)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--agent)"; }}
             >
-              <svg width="13" height="13" fill="none" stroke="white" strokeWidth={2} viewBox="0 0 24 24">
+              <svg width="13" height="13" fill="none" stroke="var(--agent-ink)" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
               Create free account
@@ -315,7 +315,7 @@ export default function Sidebar() {
                 fontSize: 9, fontWeight: 600, letterSpacing: "0.06em",
                 textTransform: "uppercase", textDecoration: "none",
                 color: active ? "var(--text-primary)" : "var(--text-muted)",
-                background: active ? "rgba(91,91,214,0.06)" : "transparent",
+                background: active ? "rgba(var(--accent-rgb),0.06)" : "transparent",
                 borderTop: active ? "2px solid var(--accent)" : "2px solid transparent",
                 transition: "color 0.12s ease, background 0.12s ease",
               }}
@@ -338,7 +338,7 @@ export default function Sidebar() {
               fontSize: 9, fontWeight: 600, letterSpacing: "0.06em",
               textTransform: "uppercase", textDecoration: "none",
               color: pathname === "/settings" ? "var(--text-primary)" : "var(--text-muted)",
-              background: pathname === "/settings" ? "rgba(91,91,214,0.06)" : "transparent",
+              background: pathname === "/settings" ? "rgba(var(--accent-rgb),0.06)" : "transparent",
               borderTop: pathname === "/settings" ? "2px solid var(--accent)" : "2px solid transparent",
               transition: "color 0.12s ease, background 0.12s ease",
             }}

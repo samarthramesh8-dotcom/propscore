@@ -311,7 +311,7 @@ export default function AnalyzePage() {
             <div
               style={{
                 background: "var(--bg-surface)",
-                border: `1px solid ${deepVerify ? "rgba(91,91,214,0.35)" : "var(--border-subtle)"}`,
+                border: `1px solid ${deepVerify ? "rgba(var(--agent-rgb),0.4)" : "var(--border-subtle)"}`,
                 borderRadius: 8,
                 padding: "14px 16px",
                 marginBottom: 12,
@@ -340,7 +340,7 @@ export default function AnalyzePage() {
                   height: 20,
                   borderRadius: 10,
                   border: "none",
-                  background: deepVerify ? "var(--accent)" : "var(--border-default)",
+                  background: deepVerify ? "var(--agent)" : "var(--border-default)",
                   position: "relative",
                   cursor: "pointer",
                   transition: "background 0.2s ease",
@@ -390,13 +390,13 @@ export default function AnalyzePage() {
               disabled={loading || !listingText.trim()}
               style={{
                 width: "100%",
-                background: "var(--accent)",
-                color: "#fff",
+                background: "var(--agent)",
+                color: "var(--agent-ink)",
                 border: "none",
                 borderRadius: 8,
                 padding: "11px 0",
                 fontSize: 13,
-                fontWeight: 600,
+                fontWeight: 700,
                 cursor: loading || !listingText.trim() ? "not-allowed" : "pointer",
                 opacity: !listingText.trim() ? 0.4 : 1,
                 display: "flex",
@@ -406,8 +406,8 @@ export default function AnalyzePage() {
                 fontFamily: "inherit",
                 transition: "opacity 0.15s ease, background 0.15s ease",
               }}
-              onMouseEnter={(e) => { if (!loading && listingText.trim()) (e.currentTarget as HTMLElement).style.background = "var(--accent-hover)"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--accent)"; }}
+              onMouseEnter={(e) => { if (!loading && listingText.trim()) (e.currentTarget as HTMLElement).style.background = "var(--agent-hover)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--agent)"; }}
             >
               {loading ? (
                 <>

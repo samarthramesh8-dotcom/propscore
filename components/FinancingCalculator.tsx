@@ -401,7 +401,7 @@ export default function FinancingCalculator({ listingText, rentcastEstimate, mon
                   fontWeight: 600,
                   color: "var(--accent)",
                   background: "none",
-                  border: "1px solid rgba(91,91,214,0.3)",
+                  border: "1px solid rgba(var(--accent-rgb),0.3)",
                   borderRadius: 5,
                   padding: "4px 10px",
                   cursor: "pointer",
@@ -443,9 +443,9 @@ export default function FinancingCalculator({ listingText, rentcastEstimate, mon
                           key={s.label}
                           style={{
                             background: isActive
-                              ? "rgba(91,91,214,0.06)"
+                              ? "rgba(var(--accent-rgb),0.06)"
                               : "var(--bg-elevated)",
-                            border: `1px solid ${isActive ? "rgba(91,91,214,0.3)" : "var(--border-subtle)"}`,
+                            border: `1px solid ${isActive ? "rgba(var(--accent-rgb),0.3)" : "var(--border-subtle)"}`,
                             borderRadius: 8,
                             padding: "12px 14px",
                           }}

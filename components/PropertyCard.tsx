@@ -3,8 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Property, PropertyStatus } from "@/lib/types";
+import { parseListPrice, parseCashFlow, parseCapRate } from "@/lib/analysis";
 import ScoreRing from "./ScoreRing";
 import ConfidenceBadge from "./ConfidenceBadge";
+import Sparkline from "./Sparkline";
 import { createClient } from "@/lib/supabase/client";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -175,6 +177,13 @@ export default function PropertyCard({
   const hasCompare = !!onCompareToggle;
   const hasDelete  = !!onDelete;
 
+  // Headline financials, parsed from the stored analysis — the numbers lead
+  // on the dashboard instrument panel.
+  const listPrice = parseListPrice(property.listing_text);
+  const cashFlow  = parseCashFlow(property.listing_text);
+  const capRate   = parseCapRate(property.listing_text);
+  const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+
   async function handleReanalyze(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
@@ -312,7 +321,7 @@ export default function PropertyCard({
         <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
           {/* Score ring */}
           <div style={{ flexShrink: 0, position: "relative" }}>
-            <ScoreRing score={property.overall_score} size={64} strokeWidth={6} glow={false} />
+            <ScoreRing score={property.overall_score} size={64} strokeWidth={6} glow={false} animate={false} />
             {scoreDelta !== null && (
               <div
                 style={{
@@ -430,6 +439,30 @@ export default function PropertyCard({
               )}
             </div>
 
+            {/* Headline financials — numbers lead the instrument panel */}
+            {(listPrice !== null || cashFlow !== null || capRate !== null) && (
+              <div style={{ display: "flex", alignItems: "baseline", gap: 16, marginBottom: 12, flexWrap: "wrap" }}>
+                {listPrice !== null && (
+                  <span className="font-mono tabular-nums" style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
+                    {usd.format(listPrice)}
+                  </span>
+                )}
+                {capRate !== null && (
+                  <span className="font-mono tabular-nums" style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+                    {capRate}% <span style={{ fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.06em" }}>CAP</span>
+                  </span>
+                )}
+                {cashFlow !== null && (
+                  <span className="font-mono tabular-nums" style={{
+                    fontSize: 12, fontWeight: 600,
+                    color: cashFlow >= 0 ? "var(--score-green)" : "var(--score-red)",
+                  }}>
+                    {cashFlow >= 0 ? "+" : ""}{usd.format(cashFlow)}<span style={{ fontSize: 9, color: "var(--text-muted)", fontWeight: 400 }}>/mo</span>
+                  </span>
+                )}
+              </div>
+            )}
+
             {/* Subscore bars */}
             <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
               {property.subscores.map((s) => (
@@ -485,8 +518,8 @@ export default function PropertyCard({
               ))}
             </div>
 
-            {/* Verdict + date */}
-            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            {/* Verdict + price trend sparkline + date */}
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
               <p
                 style={{
                   fontSize: 12,
@@ -502,6 +535,9 @@ export default function PropertyCard({
               >
                 {property.verdict}
               </p>
+              {property.rich_data?.priceHistory && property.rich_data.priceHistory.length > 1 && (
+                <Sparkline history={property.rich_data.priceHistory} />
+              )}
               <span
                 className="font-mono"
                 style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}

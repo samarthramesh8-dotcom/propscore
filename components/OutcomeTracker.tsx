@@ -179,8 +179,8 @@ export default function OutcomeTracker({ propertyId }: Props) {
             style={{
               height: 33, padding: "0 14px", borderRadius: 6,
               fontSize: 11, fontWeight: 600, fontFamily: "inherit",
-              border: "1px solid rgba(91,91,214,0.4)",
-              background: "rgba(91,91,214,0.08)",
+              border: "1px solid rgba(var(--accent-rgb),0.4)",
+              background: "rgba(var(--accent-rgb),0.08)",
               color: !outcomeType || saving || loading ? "var(--text-muted)" : "var(--accent)",
               cursor: !outcomeType || saving || loading ? "default" : "pointer",
               opacity: !outcomeType || loading ? 0.5 : 1,

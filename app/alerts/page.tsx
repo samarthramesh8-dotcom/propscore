@@ -349,8 +349,8 @@ export default function AlertsPage() {
           style={{
             height: 40,
             padding: "0 20px",
-            background: !canSubmit ? "rgba(91,91,214,0.4)" : "var(--accent)",
-            color: "#fff",
+            background: !canSubmit ? "rgba(var(--agent-rgb),0.35)" : "var(--agent)",
+            color: !canSubmit ? "var(--text-muted)" : "var(--agent-ink)",
             border: "none",
             borderRadius: 7,
             fontSize: 13,
@@ -364,7 +364,7 @@ export default function AlertsPage() {
           }}
         >
           {creating && (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2.5}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--agent-ink)" strokeWidth={2.5}
               style={{ animation: "spin 0.8s linear infinite" }}>
               <path strokeLinecap="round" d="M12 2a10 10 0 0 1 10 10" />
             </svg>
@@ -384,7 +384,7 @@ export default function AlertsPage() {
             <span style={{
               marginLeft: 8,
               padding: "2px 7px",
-              background: "rgba(91,91,214,0.12)",
+              background: "rgba(var(--accent-rgb),0.12)",
               borderRadius: 10,
               fontSize: 11,
               fontWeight: 600,

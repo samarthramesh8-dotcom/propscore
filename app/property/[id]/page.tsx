@@ -11,6 +11,7 @@ import PropertyActions from "@/components/PropertyActions";
 import NotesField from "@/components/NotesField";
 import OutcomeTracker from "@/components/OutcomeTracker";
 import ConfidenceBadge from "@/components/ConfidenceBadge";
+import Provenance from "@/components/Provenance";
 import PhotoGallery from "@/components/PhotoGallery";
 import ListingDescription from "@/components/ListingDescription";
 import PriceHistory from "@/components/PriceHistory";
@@ -199,6 +200,7 @@ export default async function PropertyPage({
                 richData={property.rich_data}
                 listingText={property.listing_text}
                 mudRate={property.mud_rate}
+                confidenceFlags={property.confidence_flags}
               />
             </div>
           )}
@@ -218,8 +220,8 @@ export default async function PropertyPage({
               className="ps-grid-2col"
               style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}
             >
-              {property.subscores.map((s) => (
-                <SubscoreCard key={s.category} category={s.category} score={s.score} summary={s.summary} />
+              {property.subscores.map((s, i) => (
+                <SubscoreCard key={s.category} category={s.category} score={s.score} summary={s.summary} index={i} />
               ))}
             </div>
           </div>
@@ -274,7 +276,9 @@ export default async function PropertyPage({
                       }}
                     >
                       <span style={{ fontSize: 11, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: 12 }}>{comp.address}</span>
-                      <span className="font-mono" style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>${comp.rent.toLocaleString()}</span>
+                      <Provenance source="Comparables" detail={`Active/recent comparable rental, ${comp.distanceMi}mi from the subject (via Rentcast).`}>
+                        <span className="font-mono" style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>${comp.rent.toLocaleString()}</span>
+                      </Provenance>
                       <span className="font-mono" style={{ fontSize: 11, color: "var(--text-secondary)" }}>{comp.bedrooms}bd / {comp.bathrooms}ba</span>
                       <span className="font-mono" style={{ fontSize: 11, color: "var(--text-secondary)" }}>{comp.squareFootage ? comp.squareFootage.toLocaleString() : "—"}</span>
                       <span className="font-mono" style={{ fontSize: 11, color: "var(--text-muted)" }}>{comp.distanceMi}mi</span>

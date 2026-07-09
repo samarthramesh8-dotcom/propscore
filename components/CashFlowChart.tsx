@@ -127,7 +127,7 @@ function Chip({
         fontWeight: 600,
         cursor: "pointer",
         border: `1px solid ${active ? "var(--accent)" : "var(--border-subtle)"}`,
-        background: active ? "rgba(91,91,214,0.12)" : "transparent",
+        background: active ? "rgba(var(--accent-rgb),0.12)" : "transparent",
         color: active ? "var(--accent)" : "var(--text-muted)",
         fontFamily: "var(--font-dm-mono, monospace)",
         letterSpacing: "-0.01em",

@@ -29,8 +29,8 @@ export default function DemoDashboardPage() {
             justifyContent: "space-between",
             gap: 12,
             padding: "10px 20px",
-            background: "rgba(91,91,214,0.08)",
-            borderBottom: "1px solid rgba(91,91,214,0.2)",
+            background: "rgba(var(--accent-rgb),0.08)",
+            borderBottom: "1px solid rgba(var(--accent-rgb),0.2)",
             flexWrap: "wrap",
           }}
         >

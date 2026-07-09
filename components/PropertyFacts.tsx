@@ -1,10 +1,25 @@
 import type { ReactNode } from "react";
 import { ZillowRichData } from "@/lib/analysis";
+import { ConfidenceFlag } from "@/lib/types";
+import Provenance from "./Provenance";
 
 interface PropertyFactsProps {
   richData: ZillowRichData;
   listingText: string;
   mudRate: number | null;
+  confidenceFlags?: ConfidenceFlag[] | null;
+}
+
+// Match a deep-verify flag to the figure it concerns, so the disagreement
+// surfaces on hover of the exact number in question.
+function findFlag(flags: ConfidenceFlag[] | null | undefined, kind: "valuation" | "rent"): ConfidenceFlag | null {
+  if (!flags) return null;
+  return flags.find((f) => {
+    const field = f.field.toLowerCase();
+    return kind === "rent"
+      ? field.includes("rent")
+      : field.includes("valuation") || field.includes("price") || field.includes("list") || field.includes("value");
+  }) ?? null;
 }
 
 function parseNum(text: string, re: RegExp): number | null {
@@ -82,7 +97,9 @@ function Section({
   );
 }
 
-export default function PropertyFacts({ richData, listingText, mudRate }: PropertyFactsProps) {
+export default function PropertyFacts({ richData, listingText, mudRate, confidenceFlags }: PropertyFactsProps) {
+  const valuationFlag = findFlag(confidenceFlags, "valuation");
+  const rentFlag      = findFlag(confidenceFlags, "rent");
   const beds      = parseNum(listingText, /Bedrooms?:\s*(\d+)/i);
   const baths     = parseNum(listingText, /Bathrooms?:\s*([\d.]+)/i);
   const sqft      = parseNum(listingText, /Living area:\s*([\d,]+)/i);
@@ -124,9 +141,15 @@ export default function PropertyFacts({ richData, listingText, mudRate }: Proper
         title="Listing Details"
         isFirst
         items={[
-          { label: "List Price",        value: fmtDollar(listPrice) },
-          { label: "Zestimate",         value: fmtDollar(richData.zestimate) },
-          { label: "Rent Zestimate",    value: richData.rentZestimate ? `$${richData.rentZestimate.toLocaleString()}/mo` : null },
+          { label: "List Price",        value: listPrice != null
+              ? <Provenance source="Zillow" detail="Seller's list price via Zillow." flag={valuationFlag}>{fmtDollar(listPrice)}</Provenance>
+              : null },
+          { label: "Zestimate",         value: richData.zestimate != null
+              ? <Provenance source="Zillow" detail="Zillow's automated valuation estimate." flag={valuationFlag}>{fmtDollar(richData.zestimate)}</Provenance>
+              : null },
+          { label: "Rent Zestimate",    value: richData.rentZestimate
+              ? <Provenance source="Zillow" detail="Zillow's automated monthly-rent estimate." flag={rentFlag}>{`$${richData.rentZestimate.toLocaleString()}/mo`}</Provenance>
+              : null },
           { label: "Price / sqft",      value: richData.pricePerSqft ? `$${richData.pricePerSqft}/sqft` : null },
           { label: "Zestimate vs List", value: zestVsList },
           { label: "Days on Zillow",    value: richData.daysOnZillow != null ? String(richData.daysOnZillow) : null },
@@ -177,7 +200,9 @@ export default function PropertyFacts({ richData, listingText, mudRate }: Proper
       <Section
         title="Financial"
         items={[
-          { label: "Tax Assessed Value", value: fmtDollar(richData.taxAssessedValue) },
+          { label: "Tax Assessed Value", value: richData.taxAssessedValue != null
+              ? <Provenance source="Zillow" detail="County tax-assessed value via Zillow.">{fmtDollar(richData.taxAssessedValue)}</Provenance>
+              : null },
           {
             label: "MUD Rate",
             value: mudRate != null

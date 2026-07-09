@@ -1,11 +1,16 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
+
 interface ScoreRingProps {
   score: number;
   size?: number;
   strokeWidth?: number;
   /** Render the glow halo (default true, set false for tiny variants) */
   glow?: boolean;
+  /** Count the number up and draw the arc on mount (default true).
+   *  The verdict-reveal moment. Disable on dense lists to stay scannable. */
+  animate?: boolean;
 }
 
 export function scoreHex(score: number): string {
@@ -20,17 +25,47 @@ function glowRgb(score: number): string {
   return "232, 56, 79";
 }
 
+function prefersReducedMotion(): boolean {
+  return typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+}
+
 export default function ScoreRing({
   score,
   size = 140,
   strokeWidth = 10,
   glow = true,
+  animate = true,
 }: ScoreRingProps) {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (score / 100) * circumference;
+
+  // The displayed value tweens 0 → score on mount; the arc + number both read
+  // from it so they rise together. Colour is pinned to the FINAL score so it
+  // never flickers through green/amber/red on the way up.
+  const [display, setDisplay] = useState(animate ? 0 : score);
+  const rafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!animate || prefersReducedMotion()) {
+      setDisplay(score);
+      return;
+    }
+    const DURATION = 520;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min((now - start) / DURATION, 1);
+      const eased = 1 - Math.pow(1 - t, 3); // easeOutCubic
+      setDisplay(score * eased);
+      if (t < 1) rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [score, animate]);
+
   const color = scoreHex(score);
   const rgb = glowRgb(score);
+  const offset = circumference - (display / 100) * circumference;
 
   return (
     <div
@@ -66,7 +101,7 @@ export default function ScoreRing({
           stroke="var(--border-subtle)"
           strokeWidth={strokeWidth}
         />
-        {/* Progress arc */}
+        {/* Progress arc — offset driven by the count-up so no CSS transition needed */}
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -78,7 +113,6 @@ export default function ScoreRing({
           strokeDashoffset={offset}
           strokeLinecap="round"
           style={{
-            transition: "stroke-dashoffset 0.7s cubic-bezier(0.4, 0, 0.2, 1)",
             filter: glow
               ? `drop-shadow(0 0 4px rgba(${rgb}, 0.75)) drop-shadow(0 0 10px rgba(${rgb}, 0.35))`
               : undefined,
@@ -99,7 +133,7 @@ export default function ScoreRing({
             letterSpacing: "-0.02em",
           }}
         >
-          {score}
+          {Math.round(display)}
         </span>
         <span
           style={{

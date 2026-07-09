@@ -1,9 +1,21 @@
 @import "tailwindcss";
 
 /* ─── Design tokens ──────────────────────────────────────── */
+/*
+  PropScore speaks in two deliberately different registers:
+
+  • VERDICT register — the finished analysis. Calm, precise. The ONLY chroma
+    is the score palette (green/amber/red); the number is the hero. Chrome
+    (nav, selection, focus) is neutral slate so colour always carries meaning.
+
+  • AGENT register — the machine working, and the actions that invoke it.
+    Terminal cyan (--agent). Cyan never appears inside a rendered verdict.
+
+  The former brand-purple has been retired: --accent is now a neutral slate.
+*/
 :root {
-  --bg-base:      #0A0A0F;
-  --bg-surface:   #111118;
+  --bg-base:      #0B0B10;
+  --bg-surface:   #111119;
   --bg-elevated:  #16161F;
   --border-subtle: #1E1E2E;
   --border-default: #252535;
@@ -12,12 +24,26 @@
   --text-secondary: #7A7A9A;
   --text-muted:     #3D3D5C;
 
+  /* Verdict palette — the only chroma in a finished analysis */
   --score-green: #00D26A;
   --score-amber: #F5A623;
   --score-red:   #E8384F;
+  --score-green-rgb: 0, 210, 106;
+  --score-amber-rgb: 245, 166, 35;
+  --score-red-rgb:   232, 56, 79;
 
-  --accent:       #5B5BD6;
-  --accent-hover: #6E6EE0;
+  /* Neutral interactive chrome (was brand purple). Selection, active nav,
+     focus, secondary emphasis — never a verdict or agent meaning. */
+  --accent:       #7E84A0;
+  --accent-hover: #9297B2;
+  --accent-rgb:   126, 132, 160;
+
+  /* Agent register — "the machine is working / an action invokes it". */
+  --agent:        #2FD6BE;
+  --agent-hover:  #52E4CF;
+  --agent-dim:    #1C7D72;
+  --agent-rgb:    47, 214, 190;
+  --agent-ink:    #06110F;   /* dark text for cyan fills (cyan is light) */
 
   --font-sans: var(--font-inter);
   --font-mono: var(--font-dm-mono);
@@ -78,12 +104,15 @@ body {
 
 /* ─── Hover utilities (CSS-only, safe in server components) ─ */
 
-/* Accent CTA button — used on Dashboard "New analysis" link */
+/* Primary CTA button — cyan (agent register: these invoke the machine).
+   Cyan is light, so filled cyan buttons take dark ink text. */
 .ps-btn-accent {
-  background: var(--accent);
+  background: var(--agent);
+  color: var(--agent-ink) !important;
   transition: background 0.15s ease;
 }
-.ps-btn-accent:hover { background: var(--accent-hover); }
+.ps-btn-accent:hover { background: var(--agent-hover); }
+.ps-btn-accent svg { stroke: var(--agent-ink); }
 
 /* Square icon button — used on Property detail back arrow */
 .ps-icon-btn {
@@ -267,6 +296,144 @@ body {
 @keyframes spin {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   AGENT REGISTER — "the machine is working"
+   Terminal-adjacent: mono, tight leading, cyan signal, motion.
+   Visually distinct from the calm verdict surfaces around it.
+   ════════════════════════════════════════════════════════════════ */
+
+.agent-surface {
+  background:
+    linear-gradient(180deg, rgba(var(--agent-rgb), 0.035), transparent 55%),
+    var(--bg-elevated);
+  border: 1px solid rgba(var(--agent-rgb), 0.22);
+  border-left: 2px solid var(--agent);
+  border-radius: 8px;
+}
+
+.agent-log {
+  font-family: var(--font-mono), "Menlo", "Consolas", monospace;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+.agent-log-active { color: var(--text-primary); }
+
+/* Terminal caret that follows the live line */
+.agent-caret::after {
+  content: "▋";
+  color: var(--agent);
+  margin-left: 1px;
+  animation: agent-blink 1.05s steps(2, start) infinite;
+}
+@keyframes agent-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+/* Live pulse dot */
+.agent-pulse {
+  background: var(--agent);
+  box-shadow: 0 0 6px rgba(var(--agent-rgb), 0.7);
+  animation: agent-pulse 1.2s ease-in-out infinite;
+}
+@keyframes agent-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
+
+/* Collapsed "how this was found" strip attached to results */
+.agent-strip {
+  font-family: var(--font-mono), monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.01em;
+  color: var(--agent);
+  background: rgba(var(--agent-rgb), 0.06);
+  border: 1px solid rgba(var(--agent-rgb), 0.18);
+  border-radius: 6px;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.agent-strip:hover {
+  background: rgba(var(--agent-rgb), 0.11);
+  border-color: rgba(var(--agent-rgb), 0.32);
+}
+
+/* ════════════════════════════════════════════════════════════════
+   VERDICT REVEAL — subscores assemble into the overall score.
+   The number counts up (JS) while the bars fill and rows rise (CSS).
+   ════════════════════════════════════════════════════════════════ */
+
+@keyframes verdict-rise {
+  from { opacity: 0; transform: translateY(7px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.verdict-rise { animation: verdict-rise 0.45s cubic-bezier(0.4, 0, 0.2, 1) both; }
+
+@keyframes verdict-bar {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+/* bars animate width via transform for GPU-cheap fill; origin left */
+.verdict-bar-fill {
+  transform-origin: left center;
+  animation: verdict-bar 0.55s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   DATA PROVENANCE — "this tool shows its work".
+   A figure sourced from Zillapi / Rentcast / comps reveals its source
+   (and any confidence flag) inline on hover. Not a modal, not a debug
+   overlay — a quiet underline that opens a small card.
+   ════════════════════════════════════════════════════════════════ */
+
+.prov {
+  position: relative;
+  cursor: help;
+  border-bottom: 1px dotted rgba(var(--accent-rgb), 0.55);
+}
+.prov-pop {
+  position: absolute;
+  bottom: calc(100% + 7px);
+  left: 0;
+  z-index: 60;
+  width: max-content;
+  max-width: 250px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 9px 11px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transform: translateY(4px);
+  pointer-events: none;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+.prov:hover .prov-pop,
+.prov:focus-visible .prov-pop { opacity: 1; transform: translateY(0); }
+.prov-source {
+  font-family: var(--font-mono), monospace;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* ─── Sparkline (dashboard price history) ─────────────────────── */
+.spark-path {
+  fill: none;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   Reduced motion — verdict reveal and all decorative motion collapse
+   to their final state instantly. Real data never waits on animation.
+   ════════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* ─── Zillow external link button ────────────────────────────── */

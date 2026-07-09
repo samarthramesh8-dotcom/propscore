@@ -474,7 +474,7 @@ export default function DashboardClient({
                     height: 30, padding: "0 10px", borderRadius: 5, fontSize: 11, fontWeight: 600,
                     cursor: "pointer", letterSpacing: "0.04em",
                     border: `1px solid ${filterBand === band ? "var(--accent)" : "var(--border-subtle)"}`,
-                    background: filterBand === band ? "rgba(91,91,214,0.12)" : "transparent",
+                    background: filterBand === band ? "rgba(var(--accent-rgb),0.12)" : "transparent",
                     color: filterBand === band ? "var(--accent)" : "var(--text-muted)",
                     fontFamily: "inherit",
                     transition: "all 0.12s ease",
