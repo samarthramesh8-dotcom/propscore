@@ -295,6 +295,7 @@ export default function FindPage() {
   // UI state
   const [loading,       setLoading]       = useState(false);
   const [streaming,     setStreaming]     = useState(false);
+  const [agentSteps,    setAgentSteps]    = useState<string[]>([]);
   const [progress,      setProgress]      = useState<{ current: number; total: number; address: string } | null>(null);
   const [results,       setResults]       = useState<FindResult[]>([]);
   const [streamSummary, setStreamSummary] = useState<StreamSummary | null>(null);
@@ -319,6 +320,12 @@ export default function FindPage() {
 
   // Active stream reader — kept so we can cancel on re-submit
   const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
+
+  // Auto-scroll the agent trace as new steps stream in
+  const traceRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    traceRef.current?.scrollTo({ top: traceRef.current.scrollHeight, behavior: "smooth" });
+  }, [agentSteps]);
 
   function openSaveModal() {
     setSaveName(location.trim() ? `${location.trim()} deals` : "My search");
@@ -390,6 +397,7 @@ export default function FindPage() {
     setResults([]);
     setStreamSummary(null);
     setFailureReasons([]);
+    setAgentSteps([]);
     setProgress(null);
     setSelectedIds(new Set());
     setGeoResults([]);
@@ -447,7 +455,9 @@ export default function FindPage() {
           if (!line.trim()) continue;
           try {
             const event = JSON.parse(line);
-            if (event.type === "progress") {
+            if (event.type === "agent_step") {
+              setAgentSteps((prev) => [...prev, event.message as string]);
+            } else if (event.type === "progress") {
               setProgress(event);
             } else if (event.type === "result") {
               setResults((prev) => [...prev, event as FindResult]);
@@ -754,6 +764,60 @@ export default function FindPage() {
               Analyzing {progress.current} of {progress.total} — {progress.address}
             </p>
           )}
+        </div>
+      )}
+
+      {/* ── Agent trace — live orchestrator narration ─────────────────────── */}
+      {agentSteps.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <span style={{
+              fontSize: 9, fontWeight: 600, letterSpacing: "0.14em",
+              textTransform: "uppercase", color: "var(--accent)",
+            }}>
+              Agent trace
+            </span>
+            {streaming && (
+              <span style={{
+                width: 6, height: 6, borderRadius: "50%", background: "var(--accent)",
+                animation: "ps-pulse 1.2s ease-in-out infinite",
+              }} />
+            )}
+          </div>
+          <div
+            ref={traceRef}
+            style={{
+              background: "var(--bg-elevated)",
+              border: "1px solid rgba(91,91,214,0.25)",
+              borderLeft: "3px solid var(--accent)",
+              borderRadius: 8,
+              padding: "12px 16px",
+              maxHeight: 220,
+              overflowY: "auto",
+              display: "flex",
+              flexDirection: "column",
+              gap: 7,
+            }}
+          >
+            {agentSteps.map((step, i) => (
+              <p
+                key={i}
+                className="font-mono"
+                style={{
+                  fontSize: 11,
+                  lineHeight: 1.6,
+                  margin: 0,
+                  whiteSpace: "pre-wrap",
+                  color: i === agentSteps.length - 1 && streaming
+                    ? "var(--text-primary)"
+                    : "var(--text-secondary)",
+                }}
+              >
+                {step}
+              </p>
+            ))}
+          </div>
+          <style>{`@keyframes ps-pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.25 } }`}</style>
         </div>
       )}
 

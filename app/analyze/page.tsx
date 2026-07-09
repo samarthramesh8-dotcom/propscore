@@ -33,6 +33,7 @@ export default function AnalyzePage() {
   const [error, setError] = useState("");
   const [mudEnabled, setMudEnabled] = useState(false);
   const [mudRate, setMudRate] = useState("");
+  const [deepVerify, setDeepVerify] = useState(false);
   const router = useRouter();
 
   const isUrl = /^https?:\/\/\S+$/.test(listingText.trim());
@@ -52,6 +53,7 @@ export default function AnalyzePage() {
         body: JSON.stringify({
           listing_text: listingText,
           mud_rate: mudRateNum && mudRateNum > 0 ? mudRateNum : null,
+          deep_verify: deepVerify,
         }),
       });
       const data = await res.json();
@@ -305,6 +307,62 @@ export default function AnalyzePage() {
               )}
             </div>
 
+            {/* ── Deep verify toggle ──────────────────────── */}
+            <div
+              style={{
+                background: "var(--bg-surface)",
+                border: `1px solid ${deepVerify ? "rgba(91,91,214,0.35)" : "var(--border-subtle)"}`,
+                borderRadius: 8,
+                padding: "14px 16px",
+                marginBottom: 12,
+                transition: "border-color 0.15s ease",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 16,
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <p style={{ fontSize: 11, fontWeight: 600, color: "var(--text-primary)", marginBottom: 2, letterSpacing: "-0.01em" }}>
+                  Deep verify
+                </p>
+                <p style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                  Cross-checks rent, valuation and price history against independent sources after scoring — slower, flags data disagreements
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeepVerify(!deepVerify)}
+                aria-pressed={deepVerify}
+                style={{
+                  flexShrink: 0,
+                  width: 36,
+                  height: 20,
+                  borderRadius: 10,
+                  border: "none",
+                  background: deepVerify ? "var(--accent)" : "var(--border-default)",
+                  position: "relative",
+                  cursor: "pointer",
+                  transition: "background 0.2s ease",
+                  padding: 0,
+                }}
+              >
+                <span
+                  style={{
+                    position: "absolute",
+                    top: 3,
+                    left: deepVerify ? 19 : 3,
+                    width: 14,
+                    height: 14,
+                    borderRadius: "50%",
+                    background: "#fff",
+                    transition: "left 0.2s ease",
+                    display: "block",
+                  }}
+                />
+              </button>
+            </div>
+
             {error && (
               <div
                 style={{
@@ -357,7 +415,9 @@ export default function AnalyzePage() {
                     <circle opacity={0.25} cx={12} cy={12} r={10} stroke="currentColor" strokeWidth={4} />
                     <path opacity={0.75} fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  {isZillow ? "Fetching Zillow + Rentcast data…" : "Analyzing with Claude…"}
+                  {deepVerify
+                    ? "Analyzing + cross-checking sources…"
+                    : isZillow ? "Fetching Zillow + Rentcast data…" : "Analyzing with Claude…"}
                 </>
               ) : (
                 <>

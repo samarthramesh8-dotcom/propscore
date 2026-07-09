@@ -4,8 +4,9 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 import Link from "next/link";
 import PropertyCard from "./PropertyCard";
 import ConfirmModal from "./ConfirmModal";
+import TrackRecord from "./TrackRecord";
 import { createClient } from "@/lib/supabase/client";
-import { Property, PropertyStatus } from "@/lib/types";
+import { OutcomeStats, Property, PropertyStatus } from "@/lib/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -247,7 +248,13 @@ function SummaryBar({ properties }: { properties: Property[] }) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function DashboardClient({ initialList }: { initialList: Property[] }) {
+export default function DashboardClient({
+  initialList,
+  outcomeStats,
+}: {
+  initialList: Property[];
+  outcomeStats?: OutcomeStats | null;
+}) {
   const [list, setList]               = useState<Property[]>(initialList);
   const [deleteTargetId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting]       = useState(false);
@@ -599,6 +606,9 @@ export default function DashboardClient({ initialList }: { initialList: Property
             <>
               {/* Portfolio summary bar — reactive to current filter */}
               <SummaryBar properties={visible} />
+
+              {/* Verdict track record — from logged outcomes (Phase 1/4) */}
+              {outcomeStats && <TrackRecord stats={outcomeStats} />}
 
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {visible.slice(0, page * 20).map((property) => (

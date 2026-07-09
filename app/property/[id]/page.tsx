@@ -10,6 +10,7 @@ import Sidebar from "@/components/Sidebar";
 import PropertyActions from "@/components/PropertyActions";
 import NotesField from "@/components/NotesField";
 import OutcomeTracker from "@/components/OutcomeTracker";
+import ConfidenceBadge from "@/components/ConfidenceBadge";
 import PhotoGallery from "@/components/PhotoGallery";
 import ListingDescription from "@/components/ListingDescription";
 import PriceHistory from "@/components/PriceHistory";
@@ -174,6 +175,11 @@ export default async function PropertyPage({
               <p style={{ fontSize: 13, lineHeight: 1.75, color: "var(--text-secondary)" }}>
                 {property.verdict}
               </p>
+              {property.confidence_flags && property.confidence_flags.length > 0 && (
+                <div style={{ marginTop: 12 }}>
+                  <ConfidenceBadge flags={property.confidence_flags} expandable />
+                </div>
+              )}
             </div>
           </div>
 

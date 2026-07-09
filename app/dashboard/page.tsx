@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import DashboardClient from "@/components/DashboardClient";
 import { Property } from "@/lib/types";
+import { getOutcomeStats } from "@/lib/outcomeStats";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -13,18 +14,21 @@ export default async function DashboardPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: properties } = await supabase
-    .from("properties")
-    .select("*")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false });
+  const [{ data: properties }, outcomeStats] = await Promise.all([
+    supabase
+      .from("properties")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false }),
+    getOutcomeStats(supabase, user.id),
+  ]);
 
   const list = (properties as unknown as Property[]) ?? [];
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg-base)" }}>
       <Sidebar />
-      <DashboardClient initialList={list} />
+      <DashboardClient initialList={list} outcomeStats={outcomeStats} />
     </div>
   );
 }

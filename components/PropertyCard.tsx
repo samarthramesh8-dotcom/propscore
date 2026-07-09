@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Property, PropertyStatus } from "@/lib/types";
 import ScoreRing from "./ScoreRing";
+import ConfidenceBadge from "./ConfidenceBadge";
 import { createClient } from "@/lib/supabase/client";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -370,6 +371,11 @@ export default function PropertyCard({
                 propertyId={property.id}
                 onStatusChange={onStatusChange}
               />
+
+              {/* Data-disagreement badge (deep verify) */}
+              {property.confidence_flags && property.confidence_flags.length > 0 && (
+                <ConfidenceBadge flags={property.confidence_flags} />
+              )}
 
               {/* Stale badge + reanalyze button */}
               {isStale && (
