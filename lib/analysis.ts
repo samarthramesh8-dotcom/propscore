@@ -288,6 +288,31 @@ export function appendFinancials(text: string, mudRate: number | null): string {
   return text + "\n" + lines.join("\n");
 }
 
+// ─── Stored-metric parsing ────────────────────────────────────────────────────
+// Extract the pre-computed figures appendFinancials wrote into listing_text, for
+// list/table display without re-deriving them. Shared by the Deal Finder live
+// stream and its DB-backed recovery endpoint.
+
+export function parseListPrice(text: string): number | null {
+  const m = text.match(/List price:\s*\$?([\d,]+)/i);
+  return m ? parseInt(m[1].replace(/,/g, ""), 10) : null;
+}
+
+export function parseCashFlow(text: string): number | null {
+  const lineM = text.match(/Monthly cash flow:[^\n]*/i);
+  if (!lineM) return null;
+  const line = lineM[0];
+  const numM = line.match(/\$?([\d,]+)/);
+  if (!numM) return null;
+  const abs = parseInt(numM[1].replace(/,/g, ""), 10);
+  return line.includes("NEGATIVE") ? -abs : abs;
+}
+
+export function parseCapRate(text: string): string | null {
+  const m = text.match(/Cap rate:\s*([\d.]+)%/i);
+  return m ? m[1] : null;
+}
+
 // ─── System prompt ────────────────────────────────────────────────────────────
 
 export const SYSTEM_PROMPT = `You are a senior real estate investment analyst with 20 years of experience managing $40M in rental assets. Your analyses inform real capital deployment decisions. Precision is your professional obligation.

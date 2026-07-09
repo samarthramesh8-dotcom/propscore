@@ -7,11 +7,41 @@
 // verdicts stay deterministic and comparable with /api/analyze.
 //
 // Streams NDJSON to the client:
+//   {type:"run_started", search_run_id}                 — the run's id, for URL-based recovery
 //   {type:"agent_step", message}                        — live agent narration / tool trace
 //   {type:"progress",  current, total, address}         — a property entered scoring
 //   {type:"result",    property_id, ...}                — scored + saved property
 //   {type:"error",     address, message}                — per-property failure
 //   {type:"done",      total_found, total_analyzed, errors}
+//
+// Migration required for run persistence (bug fix — state survives navigation):
+// each scored property was already inserted immediately in scoreAndInsert, but
+// there was no way to look up "everything found by this specific search" after
+// the page unmounts. Run this in your Supabase SQL editor:
+//
+//   alter table properties add column if not exists search_run_id uuid;
+//   create index if not exists idx_properties_search_run_id on properties(search_run_id);
+//
+//   create table if not exists search_runs (
+//     id uuid primary key default gen_random_uuid(),
+//     user_id uuid not null references auth.users(id) on delete cascade,
+//     status text not null default 'running' check (status in ('running', 'done', 'error')),
+//     total_found integer,
+//     total_analyzed integer,
+//     created_at timestamptz not null default now(),
+//     completed_at timestamptz
+//   );
+//
+//   alter table search_runs enable row level security;
+//
+//   create policy "Users can view own search runs"
+//     on search_runs for select using (auth.uid() = user_id);
+//   create policy "Users can insert own search runs"
+//     on search_runs for insert with check (auth.uid() = user_id);
+//   create policy "Users can update own search runs"
+//     on search_runs for update using (auth.uid() = user_id);
+//
+import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
@@ -21,6 +51,9 @@ import {
   fetchViaZillapi,
   formatRentcastForClaude,
   geocodeLocation,
+  parseCapRate,
+  parseCashFlow,
+  parseListPrice,
   RentcastResult,
   SYSTEM_PROMPT,
 } from "@/lib/analysis";
@@ -45,26 +78,6 @@ function parseClaudeJson(raw: string): Record<string, unknown> {
     try { return JSON.parse(match[0]); } catch { /* fall through */ }
   }
   throw new Error("Claude returned an unexpected response. Please try again.");
-}
-
-function parseListPrice(text: string): number | null {
-  const m = text.match(/List price:\s*\$?([\d,]+)/i);
-  return m ? parseInt(m[1].replace(/,/g, ""), 10) : null;
-}
-
-function parseCashFlow(text: string): number | null {
-  const lineM = text.match(/Monthly cash flow:[^\n]*/i);
-  if (!lineM) return null;
-  const line = lineM[0];
-  const numM = line.match(/\$?([\d,]+)/);
-  if (!numM) return null;
-  const abs = parseInt(numM[1].replace(/,/g, ""), 10);
-  return line.includes("NEGATIVE") ? -abs : abs;
-}
-
-function parseCapRate(text: string): string | null {
-  const m = text.match(/Cap rate:\s*([\d.]+)%/i);
-  return m ? m[1] : null;
 }
 
 // ─── Zillapi search ───────────────────────────────────────────────────────────
@@ -329,6 +342,13 @@ export async function POST(request: NextRequest) {
       typeof body.max_results === "number" ? body.max_results : 10,
       20,
     );
+    // Client generates this so it can address the run in the URL before the
+    // network round trip even completes; fall back to generating one here for
+    // any caller that doesn't supply it.
+    const searchRunId: string =
+      typeof body.search_run_id === "string" && body.search_run_id.trim().length > 0
+        ? body.search_run_id.trim()
+        : randomUUID();
 
     const apiKey = process.env.ZILLAPI_KEY;
     if (!apiKey || apiKey === "your_zillapi_key") {
@@ -343,6 +363,16 @@ export async function POST(request: NextRequest) {
       );
     }
     const coords = geocoded; // non-null binding usable inside the tool closures
+
+    // Persist a run row so the frontend can recover state after navigating away
+    // mid-search (best-effort — a missing search_runs table just means this run
+    // isn't recoverable after a navigation; the search itself still works).
+    const { error: runInsertError } = await supabase
+      .from("search_runs")
+      .insert({ id: searchRunId, user_id: user.id, status: "running" });
+    if (runInsertError) {
+      console.warn("/api/find: could not create search_runs row (migration may be pending):", runInsertError.message);
+    }
 
     // ── Stream NDJSON ─────────────────────────────────────────────────────────
     const encoder = new TextEncoder();
@@ -429,6 +459,7 @@ export async function POST(request: NextRequest) {
         rentcast_comps:    rentcast?.comparables ?? null,
         mud_rate:          null,
         source:            "deal_finder",
+        search_run_id:     searchRunId,
       };
 
       let ins = await supabase.from("properties").insert(payload).select("id").single();
@@ -561,6 +592,8 @@ export async function POST(request: NextRequest) {
     // ── Agent loop (runs in the background while the stream is returned) ──────
     (async () => {
       try {
+        await writeEvent({ type: "run_started", search_run_id: searchRunId });
+
         const kickoff = [
           `Find the best cash-flowing deals for this search:`,
           `- Location: ${location} (geocoded to ${coords.lat.toFixed(4)}, ${coords.lon.toFixed(4)} — search_listings searches around this point)`,
@@ -667,6 +700,20 @@ export async function POST(request: NextRequest) {
             ? { message: "No listings found matching your criteria. Try broadening your search." }
             : {}),
         });
+
+        const { error: runDoneError } = await supabase
+          .from("search_runs")
+          .update({
+            status: "done",
+            total_found: registry.size,
+            total_analyzed,
+            completed_at: new Date().toISOString(),
+          })
+          .eq("id", searchRunId)
+          .eq("user_id", user.id);
+        if (runDoneError) {
+          console.warn("/api/find: could not finalize search_runs row:", runDoneError.message);
+        }
       } catch (err) {
         console.error("/api/find agent loop error:", err);
         const msg = err instanceof Error ? err.message : String(err);
@@ -677,6 +724,20 @@ export async function POST(request: NextRequest) {
           total_analyzed,
           errors: errors + 1,
         }).catch(() => undefined);
+
+        const { error: runErrorUpdateError } = await supabase
+          .from("search_runs")
+          .update({
+            status: "error",
+            total_found: registry.size,
+            total_analyzed,
+            completed_at: new Date().toISOString(),
+          })
+          .eq("id", searchRunId)
+          .eq("user_id", user.id);
+        if (runErrorUpdateError) {
+          console.warn("/api/find: could not mark search_runs row as errored:", runErrorUpdateError.message);
+        }
       } finally {
         await writer.close().catch(() => undefined);
       }

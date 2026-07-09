@@ -39,6 +39,19 @@ interface GeoResult extends FindResult {
   geocoded?: boolean;
 }
 
+// Shape returned by GET /api/find/[runId] — recovers state after navigation
+interface RunInfo {
+  status: "running" | "done" | "error";
+  total_found: number | null;
+  total_analyzed: number | null;
+}
+
+interface FindRunResponse {
+  run: RunInfo | null;
+  results: FindResult[];
+  error?: string;
+}
+
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
 const usd = new Intl.NumberFormat("en-US", {
@@ -292,8 +305,11 @@ export default function FindPage() {
   const [minBaths,   setMinBaths]   = useState("0");
   const [maxResults, setMaxResults] = useState("10");
 
-  // UI state
-  const [loading,       setLoading]       = useState(false);
+  // UI state — starts true when a ?run= param is present so the mount-hydration
+  // effect below doesn't need to flip it synchronously in its own body
+  const [loading,       setLoading]       = useState(() =>
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).has("run")
+  );
   const [streaming,     setStreaming]     = useState(false);
   const [agentSteps,    setAgentSteps]    = useState<string[]>([]);
   const [progress,      setProgress]      = useState<{ current: number; total: number; address: string } | null>(null);
@@ -318,14 +334,86 @@ export default function FindPage() {
   const [saveError,     setSaveError]     = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
 
-  // Active stream reader — kept so we can cancel on re-submit
+  // Active stream reader — kept so we can cancel on re-submit or unmount
   const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
+
+  // Poll interval for recovering an in-progress search after navigation
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Auto-scroll the agent trace as new steps stream in
   const traceRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     traceRef.current?.scrollTo({ top: traceRef.current.scrollHeight, behavior: "smooth" });
   }, [agentSteps]);
+
+  // Cancel any live stream read on unmount — the DB write (not this client read)
+  // is the source of truth, so abandoning the reader can't lose data.
+  useEffect(() => {
+    return () => {
+      readerRef.current?.cancel().catch(() => undefined);
+    };
+  }, []);
+
+  // On mount, recover an in-progress or completed search addressed by ?run=
+  // in the URL — e.g. after navigating away mid-search and coming back.
+  useEffect(() => {
+    const runId = new URLSearchParams(window.location.search).get("run");
+    if (!runId) return;
+
+    let cancelled = false;
+
+    async function poll() {
+      try {
+        const res = await fetch(`/api/find/${runId}`);
+        if (cancelled) return;
+        if (!res.ok) {
+          setLoading(false);
+          return;
+        }
+        const data: FindRunResponse = await res.json();
+        if (cancelled) return;
+
+        setResults(data.results ?? []);
+        setGeoResults((data.results ?? []).map((r) => ({ ...r })));
+        setLoading(false);
+
+        if (data.run?.status === "running") {
+          setStreaming(true);
+          if (!pollIntervalRef.current) {
+            pollIntervalRef.current = setInterval(poll, 2500);
+          }
+        } else {
+          setStreaming(false);
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
+          }
+          if (data.run) {
+            setStreamSummary({
+              total_found:    data.run.total_found    ?? data.results.length,
+              total_analyzed: data.run.total_analyzed ?? data.results.length,
+              errors: 0,
+              ...(data.run.status === "error"
+                ? { message: "This search stopped before finishing — showing what was found so far." }
+                : {}),
+            });
+          }
+        }
+      } catch {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    poll();
+
+    return () => {
+      cancelled = true;
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
+  }, []);
 
   function openSaveModal() {
     setSaveName(location.trim() ? `${location.trim()} deals` : "My search");
@@ -390,6 +478,18 @@ export default function FindPage() {
       await readerRef.current.cancel().catch(() => undefined);
       readerRef.current = null;
     }
+    // A recovered run's polling loop shouldn't keep running once a fresh search starts
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+
+    // Address this search in the URL immediately — before the network round
+    // trip even completes — so it's recoverable if the tab closes right away.
+    const runId = crypto.randomUUID();
+    const runUrl = new URL(window.location.href);
+    runUrl.searchParams.set("run", runId);
+    window.history.replaceState({}, "", runUrl.toString());
 
     setLoading(true);
     setStreaming(false);
@@ -414,12 +514,18 @@ export default function FindPage() {
           beds_min:    parseInt(minBeds, 10),
           baths_min:   parseInt(minBaths, 10),
           max_results: parseInt(maxResults, 10),
+          search_run_id: runId,
         }),
       });
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({ error: `Server error ${res.status}` }));
         setError((data as FindResponse).error ?? `Server error ${res.status}`);
+        // Nothing was actually persisted server-side for a request that
+        // failed outright — drop the now-invalid run id from the URL.
+        const failedUrl = new URL(window.location.href);
+        failedUrl.searchParams.delete("run");
+        window.history.replaceState({}, "", failedUrl.toString());
         return;
       }
 
