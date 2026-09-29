@@ -11,7 +11,6 @@
 //     add column if not exists confidence_flags jsonb;
 //
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import {
   RentcastComp,
@@ -25,6 +24,7 @@ import {
   extractRichData,
 } from "@/lib/analysis";
 import { runDeepVerify } from "@/lib/deepVerify";
+import { scoreListing } from "@/lib/scoring";
 
 // Single-property analyses can run long when deep_verify is enabled
 export const maxDuration = 300;
@@ -40,79 +40,6 @@ interface AnalysisInput {
   richData: ZillowRichData | null;
   zillowUrl: string;
 }
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-const SYSTEM_PROMPT = `You are a senior real estate investment analyst with 20 years of experience managing $40M in rental assets. Your analyses inform real capital deployment decisions. Precision is your professional obligation.
-
-═══ HARD RULES (violating any of these degrades the analysis) ═══
-1. EVERY sentence in EVERY summary must contain at least one hard data point: a dollar amount, percentage, year, count, or direct quote from the listing. "The neighborhood is desirable" is a firing offense. "$209/sqft vs the 78759 median of $195 — a 7% premium on 12 DOM" is correct.
-2. The PRE-COMPUTED INVESTMENT METRICS section contains pre-calculated numbers. Use those exact figures. Do not re-derive independently — cite them directly (e.g. "the pre-computed cap rate of 4.8%").
-3. The verdict MUST open with exactly one of: STRONG BUY · BUY · CONDITIONAL BUY · PASS · STRONG PASS
-4. Take a position. Never hedge with "it depends" without immediately specifying what it depends on and the exact number that triggers each outcome.
-
-═══ SCORING SCALE ═══
-90–100  Exceptional — rare upside, clear deal, act fast
-70–89   Solid — positive cash flow, manageable risk, actionable
-50–69   Marginal — pencils out only under specific, stated conditions
-30–49   Risky — multiple quantified red flags, caution warranted
-0–29    Avoid — value-destroying at current price
-
-═══ MANDATORY CONTENT PER CATEGORY (5–6 sentences each) ═══
-
-1. LOCATION & NEIGHBORHOOD
-   Required: school rating score (X/10), distance to primary employment anchor (X miles or "not inferable"), city/zip vacancy rate or rental demand signal, 3-to-5-year appreciation trend for the metro or submarket (X%/yr if available), and any FEMA/natural hazard context. If data is missing, state the gap and penalize accordingly.
-
-2. PRICE & VALUE
-   Required: calculated price/sqft ($X/sqft), comparison to known market range or Zestimate ($X delta, X% above/below), DOM interpretation (X days = buyer's leverage / fairly priced / demand signal), price cut history if any (cut $X on [date]), and a precise negotiation assessment (e.g. "offer $X, walk at $X").
-
-3. RENTAL INCOME POTENTIAL
-   Required: monthly rent source and amount ($X/mo from Rentcast/Zestimate/estimate), 1% rule result stated explicitly (X% — PASSES/FAILS; need $X/mo to pass), cap rate from pre-computed section (X%), monthly cash flow from pre-computed section (+/−$X/mo), and HOA/MUD impact if applicable. If cash flow is negative, state the break-even rent and year.
-
-4. CONDITION & MAINTENANCE
-   Required: year built, estimated annual maintenance budget from pre-computed section ($X/yr = X% of value), specific condition signals from the description (quote or paraphrase actual language), age-based risk timeline (roof, HVAC, plumbing — expected replacement in X years), and any renovation credits with a skepticism flag if cosmetic-only.
-
-5. MARKET TRENDS
-   Required: buyer's vs. seller's market declaration with evidence (DOM, inventory), 1–2 specific metro-level data points (population growth, job growth, GDP trend, or major employer context), rental market direction (tightening/softening), and interest rate impact on the buyer pool for this price band.
-
-═══ VERDICT (4–5 sentences) ═══
-Sentence 1: "[RECOMMENDATION] — [the single most decisive number]"
-Sentence 2: Core investment thesis in one sentence (why this works or doesn't) with the key metric.
-Sentence 3: Specific action — offer price if buying, or the condition that must change, or "do not pursue at any price above $X."
-Sentence 4: Year 1 expected cash flow from pre-computed section.
-Sentence 5: 5-year total return estimate assuming 3% annual appreciation and cited rent growth.
-
-═══ BULL CASE (4–5 sentences) ═══
-A specific, realistic upside scenario. Must include: the trigger condition, Year 3 or Year 5 cash flow number, and total equity/return estimate. Format: "If [specific condition occurs], by Year [X] this property generates $X/mo in cash flow. At that point the yield-on-cost reaches X% and total equity including appreciation is approximately $X."
-
-═══ BEAR CASE (4–5 sentences) ═══
-A specific, realistic downside scenario. Must include: the failure trigger, a major cost event with dollar amount, and cumulative loss estimate over Years 1–3. Format: "If [specific condition] and [specific cost event of $X] hits in Year [X], the cumulative net loss through Year 3 is approximately $X."
-
-═══ SCORING DISCIPLINE ═══
-• Missing price data → Price & Value ≤ 40
-• HOA > $400/mo → Rental Income Potential ≤ 45 (auto, cite the HOA drag in $/mo)
-• DOM > 60 → Price & Value ≤ 55
-• Cap rate < 4% → Rental Income Potential ≤ 35
-• Effective cap rate after HOA/MUD < 3% → Rental Income Potential ≤ 25
-• Year built < 1970, no renovation mention → Condition ≤ 50
-• Negative monthly cash flow > −$500/mo → Overall ≤ 55
-• Overall = weighted: Location 25% · Price 25% · Rental 25% · Condition 15% · Market 10%
-
-Return ONLY valid JSON — no markdown fences, no preamble, no trailing text:
-{
-  "address": "<full address>",
-  "overall_score": <integer 0–100>,
-  "subscores": [
-    { "category": "Location & Neighborhood", "score": <0–100>, "summary": "<5–6 hard-number sentences>" },
-    { "category": "Price & Value",            "score": <0–100>, "summary": "<5–6 hard-number sentences>" },
-    { "category": "Rental Income Potential",  "score": <0–100>, "summary": "<5–6 sentences with cap rate, cash flow, 1% result>" },
-    { "category": "Condition & Maintenance",  "score": <0–100>, "summary": "<4–5 sentences with year, budget, condition flags>" },
-    { "category": "Market Trends",            "score": <0–100>, "summary": "<4–5 sentences with specific metro data>" }
-  ],
-  "verdict": "<RECOMMENDATION — decisive metric — thesis — offer action — Year 1 cash flow — 5-yr return estimate>",
-  "bull_case": "<4–5 sentences: specific upside scenario with Year 3-5 numbers>",
-  "bear_case": "<4–5 sentences: specific downside with cost event and cumulative loss>"
-}`;
 
 // ─── Rentcast ─────────────────────────────────────────────────────────────────
 
@@ -244,23 +171,6 @@ async function fetchListingFromUrl(url: string): Promise<AnalysisInput> {
   return { listingText: `Source URL: ${url}\n\n${text.slice(0, 15000)}`, rentcast: null, richData: null, zillowUrl: "" };
 }
 
-function parseClaudeJson(raw: string): Record<string, unknown> {
-  // Try direct parse
-  try {
-    return JSON.parse(raw);
-  } catch { /* fall through */ }
-
-  // Claude sometimes wraps JSON in markdown fences or adds preamble — extract the object
-  const match = raw.match(/\{[\s\S]*\}/);
-  if (match) {
-    try {
-      return JSON.parse(match[0]);
-    } catch { /* fall through */ }
-  }
-
-  throw new Error("Claude returned an unexpected response. Please try again.");
-}
-
 // Catches both PostgreSQL 42703 (undefined_column) and PostgREST PGRST204
 // (schema cache miss) — both indicate the DB migration hasn't been run yet.
 function isSchemaMissing(err: { code?: string; message?: string } | null): boolean {
@@ -320,20 +230,7 @@ export async function POST(request: NextRequest) {
     const withMud         = mudRate ? zillapiText + formatMudForClaude(mudRate) : zillapiText;
     const listingText     = appendFinancials(withMud, mudRate);
 
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 3500,
-      temperature: 0.2,  // analytical precision over creativity
-      system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: listingText }],
-    });
-
-    const content = message.content[0];
-    if (content.type !== "text") {
-      throw new Error("Unexpected response type from Claude");
-    }
-
-    const analysis = parseClaudeJson(content.text);
+    const analysis = await scoreListing(listingText);
 
     // ── Optional deep verification (Phase 3) ──────────────────────────────
     // Opt-in second pass on claude-fable-5 that cross-checks the data sources

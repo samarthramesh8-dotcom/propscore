@@ -55,9 +55,9 @@ import {
   parseCashFlow,
   parseListPrice,
   RentcastResult,
-  SYSTEM_PROMPT,
 } from "@/lib/analysis";
 import { formatOutcomeStatsForClaude, getOutcomeStats } from "@/lib/outcomeStats";
+import { scoreListing } from "@/lib/scoring";
 
 // Vercel: allow up to 5 minutes for agent runs
 export const maxDuration = 300;
@@ -68,17 +68,6 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const MAX_TOOL_CALLS = 40;
 const MAX_ITERATIONS = 30;
 const TIME_BUDGET_MS = 250_000; // leave headroom under maxDuration for the final summary
-
-// ─── Helpers (unchanged from the sequential implementation) ───────────────────
-
-function parseClaudeJson(raw: string): Record<string, unknown> {
-  try { return JSON.parse(raw); } catch { /* fall through */ }
-  const match = raw.match(/\{[\s\S]*\}/);
-  if (match) {
-    try { return JSON.parse(match[0]); } catch { /* fall through */ }
-  }
-  throw new Error("Claude returned an unexpected response. Please try again.");
-}
 
 // ─── Zillapi search ───────────────────────────────────────────────────────────
 
@@ -434,17 +423,7 @@ export async function POST(request: NextRequest) {
       const listingText = appendFinancials(rawText, null);
 
       // Per-listing scoring stays on Sonnet — deterministic, cheap, unchanged prompt
-      const message = await anthropic.messages.create({
-        model: "claude-sonnet-4-6",
-        max_tokens: 3500,
-        temperature: 0.2,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: "user", content: listingText }],
-      });
-
-      const content = message.content[0];
-      if (content.type !== "text") throw new Error("Unexpected Claude response type");
-      const analysis = parseClaudeJson(content.text);
+      const analysis = await scoreListing(listingText);
 
       const payload = {
         user_id:           user!.id,
@@ -484,10 +463,10 @@ export async function POST(request: NextRequest) {
       await writeEvent({
         type:              "result",
         property_id:       ins.data.id,
-        address:           analysis.address as string,
-        overall_score:     analysis.overall_score as number,
-        verdict:           analysis.verdict as string,
-        subscores:         analysis.subscores as unknown[],
+        address:           analysis.address,
+        overall_score:     analysis.overall_score,
+        verdict:           analysis.verdict,
+        subscores:         analysis.subscores,
         list_price:        parseListPrice(listingText),
         monthly_cash_flow: parseCashFlow(listingText),
         cap_rate:          parseCapRate(listingText),

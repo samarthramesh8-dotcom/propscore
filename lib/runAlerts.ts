@@ -1,10 +1,8 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { fetchViaZillapi, appendFinancials, geocodeLocation, SYSTEM_PROMPT } from "@/lib/analysis";
+import { fetchViaZillapi, appendFinancials, geocodeLocation } from "@/lib/analysis";
+import { scoreListing } from "@/lib/scoring";
 import { sendAlertEmail } from "@/lib/email";
 import { SavedSearch } from "@/lib/types";
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 interface AlertProperty {
   property_id: string;
@@ -97,27 +95,10 @@ export async function runAlerts(searchId?: string): Promise<{ processed: number 
         const { listingText: rawText } = await fetchViaZillapi(zillowUrl);
         const withFinancials = appendFinancials(rawText, null);
 
-        const message = await anthropic.messages.create({
-          model: "claude-sonnet-4-6",
-          max_tokens: 1000,
-          temperature: 0.2,
-          system: SYSTEM_PROMPT,
-          messages: [{ role: "user", content: withFinancials }],
-        });
+        // Failures reject this promise; allSettled below drops them
+        const analysis = await scoreListing(withFinancials);
 
-        const content = message.content[0];
-        if (content.type !== "text") return null;
-
-        let analysis: Record<string, unknown>;
-        try {
-          const raw = content.text;
-          const match = raw.match(/\{[\s\S]*\}/);
-          analysis = JSON.parse(match ? match[0] : raw);
-        } catch {
-          return null;
-        }
-
-        if ((analysis.overall_score as number) < search.min_score) return null;
+        if (analysis.overall_score < search.min_score) return null;
 
         // Save to properties table
         const payload = {

@@ -386,6 +386,82 @@ Return ONLY valid JSON — no markdown fences, no preamble, no trailing text:
   "bear_case": "<4–5 sentences: specific downside with cost event and cumulative loss>"
 }`;
 
+// ─── Structured-output contract for SYSTEM_PROMPT ─────────────────────────────
+// Enforced via structured outputs so the API guarantees parseable JSON (no
+// fences, no preamble). The five categories are fixed required object keys
+// rather than an array because array length can't be constrained — an array
+// schema let a duplicated "Price & Value" subscore through in testing.
+// toListingAnalysis() converts back to the subscores array the app stores.
+
+export const SUBSCORE_CATEGORIES = [
+  ["location_and_neighborhood", "Location & Neighborhood"],
+  ["price_and_value",           "Price & Value"],
+  ["rental_income_potential",   "Rental Income Potential"],
+  ["condition_and_maintenance", "Condition & Maintenance"],
+  ["market_trends",             "Market Trends"],
+] as const;
+
+const SUBSCORE_SCHEMA = {
+  type: "object",
+  properties: {
+    score:   { type: "integer" },
+    summary: { type: "string" },
+  },
+  required: ["score", "summary"],
+  additionalProperties: false,
+};
+
+export const ANALYSIS_SCHEMA = {
+  type: "object",
+  properties: {
+    address:       { type: "string" },
+    overall_score: { type: "integer" },
+    subscores: {
+      type: "object",
+      properties: Object.fromEntries(SUBSCORE_CATEGORIES.map(([key]) => [key, SUBSCORE_SCHEMA])),
+      required: SUBSCORE_CATEGORIES.map(([key]) => key),
+      additionalProperties: false,
+    },
+    verdict:   { type: "string" },
+    bull_case: { type: "string" },
+    bear_case: { type: "string" },
+  },
+  required: ["address", "overall_score", "subscores", "verdict", "bull_case", "bear_case"],
+  additionalProperties: false,
+};
+
+export interface ListingAnalysis {
+  address: string;
+  overall_score: number;
+  subscores: { category: string; score: number; summary: string }[];
+  verdict: string;
+  bull_case: string;
+  bear_case: string;
+}
+
+// Convert the schema-shaped model output into the stored/rendered shape.
+export function toListingAnalysis(raw: {
+  address: string;
+  overall_score: number;
+  subscores: Record<string, { score: number; summary: string }>;
+  verdict: string;
+  bull_case: string;
+  bear_case: string;
+}): ListingAnalysis {
+  return {
+    address:       raw.address,
+    overall_score: raw.overall_score,
+    subscores:     SUBSCORE_CATEGORIES.map(([key, category]) => ({
+      category,
+      score:   raw.subscores[key].score,
+      summary: raw.subscores[key].summary,
+    })),
+    verdict:   raw.verdict,
+    bull_case: raw.bull_case,
+    bear_case: raw.bear_case,
+  };
+}
+
 // ─── Geocoding ────────────────────────────────────────────────────────────────
 
 export async function geocodeLocation(query: string): Promise<{ lat: number; lon: number } | null> {
